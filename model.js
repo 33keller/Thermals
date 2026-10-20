@@ -74,10 +74,15 @@ const oldResize=window.resizeFx;window.resizeFx=function(){oldResize();sizeMf()}
 map.on('movestart',()=>mctx.clearRect(0,0,W,H));
 function drawArrows(){mctx.clearRect(0,0,W,H);if(moving||!(S.arrows||S.shadeOn))return;const E=env(),F=getField(E);if(!F)return;
   if(S.shadeOn){mctx.fillStyle='rgba(0,0,40,.4)';for(let i=0;i<F.shade.length;i++)if(F.shade[i]){const r=(i/F.cols)|0,c=i%F.cols;mctx.fillRect(c*G-G/2,r*G-G/2,G,G)}}
-  if(S.arrows){mctx.lineWidth=2;for(let r=2;r<F.rows-2;r+=5)for(let c=2;c<F.cols-2;c+=5){const i=r*F.cols+c;if(!F.ok[i])continue;
-    const vx=F.vx[i],vy=F.vy[i],m=Math.hypot(vx,vy);if(m<.02)continue;const L=Math.min(28,m*30),ux=vx/m,uy=vy/m,x=c*G,y=r*G,s=F.sv[i],hx=x+ux*L/2,hy=y+uy*L/2;
-    mctx.strokeStyle=s>.2?'#ff6b6b':s<-.2?'#5fb0ff':'#ffffff';mctx.beginPath();mctx.moveTo(x-ux*L/2,y-uy*L/2);mctx.lineTo(hx,hy);
-    mctx.moveTo(hx,hy);mctx.lineTo(hx-ux*6-uy*4,hy-uy*6+ux*4);mctx.moveTo(hx,hy);mctx.lineTo(hx-ux*6+uy*4,hy-uy*6-ux*4);mctx.stroke()}}}
+  if(S.arrows){mctx.lineWidth=1.25;mctx.lineCap='round';mctx.globalAlpha=.6;const step=7,h=3.5;
+    for(let r=3;r<F.rows-3;r+=step)for(let c=3;c<F.cols-3;c+=step){const i=r*F.cols+c;if(!F.ok[i])continue;
+      const vx=F.vx[i],vy=F.vy[i],m=Math.hypot(vx,vy);if(m<.03)continue;
+      const L=6+Math.min(10,m*12),ux=vx/m,uy=vy/m,x=c*G,y=r*G,s=F.sv[i],hx=x+ux*L/2,hy=y+uy*L/2;
+      mctx.strokeStyle=s>.2?'#ff8a80':s<-.2?'#7cc0ff':'#cfcdc6';
+      mctx.beginPath();mctx.moveTo(x-ux*L/2,y-uy*L/2);mctx.lineTo(hx,hy);
+      mctx.moveTo(hx-ux*h-uy*h*.7,hy-uy*h+ux*h*.7);mctx.lineTo(hx,hy);mctx.lineTo(hx-ux*h+uy*h*.7,hy-uy*h-ux*h*.7);mctx.stroke()}
+    mctx.globalAlpha=1}
+}
 setInterval(drawArrows,400);
 
 const oldUI=window.updateUI;
