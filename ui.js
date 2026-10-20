@@ -136,5 +136,23 @@ function paintTrack(){const p=refPt(),k=selDate.toDateString()+p.lat.toFixed(2)+
 setInterval(paintTrack,3000);paintTrack();
 
 if(!localStorage.getItem('ts_lp_hint')){setTimeout(()=>toast('Tip: long-press the map to drop a pin',4000),1200);localStorage.setItem('ts_lp_hint','1')}
+/* keep the app pinned to the screen (iOS keyboard, overscroll, rotation) */
+const lock=document.createElement('style');
+lock.textContent='html,body{position:fixed;inset:0;width:100%;height:100%;overscroll-behavior:none}input,select,textarea{font-size:16px!important}';
+document.head.appendChild(lock);
+function pin(){if(window.scrollX||window.scrollY)window.scrollTo(0,0);document.documentElement.scrollTop=document.body.scrollTop=0;map.invalidateSize({pan:false});resizeFx();dirty=true}
+window.addEventListener('scroll',()=>{if(window.scrollX||window.scrollY)window.scrollTo(0,0)},{passive:true});
+document.addEventListener('focusout',e=>{if(e.target.matches('input,select,textarea'))setTimeout(pin,100)});
+if(window.visualViewport)visualViewport.addEventListener('resize',()=>{if(visualViewport.height>innerHeight*.85)setTimeout(pin,50)});
+window.addEventListener('orientationchange',()=>setTimeout(()=>{pin();setSnap(cur,false)},300));
+window.addEventListener('pageshow',pin);
+
+/* "back to my stands" button, in case the map gets panned somewhere odd */
+const fS=document.createElement('button');fS.setAttribute('aria-label','Back to my pins');
+fS.innerHTML='<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+fab.insertBefore(fS,fab.firstChild);
+fS.onclick=()=>{const pts=markers.filter(m=>m.type!=='party').map(m=>[m.lat,m.lng]);
+  if(!pts.length){toast('No pins yet');return}
+  map.fitBounds(L.latLngBounds(pts).pad(.3),{maxZoom:16,paddingBottomRight:[0,sh.getBoundingClientRect().height]})};
 syncPlay();dirty=true;
 })();
