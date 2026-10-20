@@ -31,12 +31,14 @@ button,.chip,input[type=date]{background:#23272b;color:#e8e6e1;border:1px solid 
 .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
 .cell{background:#1d2125;border-radius:8px;padding:7px 9px}
+.cell.wide{grid-column:1 / -1}
 .cell small{display:block;color:#a9a7a0;font-size:11px}
 .cell b{font-weight:600;font-size:14px}
 #alert{font-size:13px;margin:6px 0;color:#a9a7a0}
 #alert.bad{color:#ff8a80}
-.legend{display:flex;gap:12px;font-size:12px;color:#a9a7a0;margin:2px 0}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#a9a7a0;margin:2px 0}
 .d{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:1px solid #000}
+.sq{display:inline-block;width:10px;height:10px;margin-right:4px;vertical-align:-1px;border:1px solid #000}
 .mk{width:24px;height:24px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font:700 11px sans-serif;color:#fff}
 .leaflet-popup-content button{margin:4px 4px 0 0;padding:6px 8px;font-size:13px}
 .fine{font-size:11px;color:#77756f;line-height:1.4}
@@ -55,12 +57,13 @@ button,.chip,input[type=date]{background:#23272b;color:#e8e6e1;border:1px solid 
   <div class="chips"><button id="play">▶ Play</button><button id="now">Now</button><button id="loc">My location</button><input id="date" type="date"></div>
   <div class="more">
     <div class="chips" style="margin-top:10px"><span style="font-size:13px;color:#a9a7a0">Tap adds:</span>
-      <button class="chip on" data-m="stand">Stand</button><button class="chip" data-m="bed">Bedding</button><button class="chip" data-m="food">Food</button><button class="chip" data-m="none">Nothing</button></div>
+      <button class="chip on" data-m="stand">Stand</button><button class="chip" data-m="bed">Bedding</button><button class="chip" data-m="food">Food</button><button class="chip" data-m="none">Land info</button></div>
+    <div class="legend" style="margin-top:8px"><span><span class="sq" style="background:#f2b134"></span>Federal</span><span><span class="sq" style="background:#8f6cf0"></span>State</span><span><span class="sq" style="background:#9acd32"></span>Local</span><span><span class="sq" style="background:#e68d45"></span>Private conservation</span><span>Unshaded = likely private</span></div>
     <div class="grid" id="info"></div>
     <div class="row"><label>Wind from</label><input id="wd" type="range" min="0" max="350" step="10"><span class="v" id="wdV"></span></div>
     <div class="row"><label>Wind mph</label><input id="ws" type="range" min="0" max="25" step="1"><span class="v" id="wsV"></span></div>
     <div class="chips"><button id="live">Use forecast wind</button></div>
-    <p class="fine">Simplified thermal model for planning. Always confirm in the field with a puffer or milkweed. Shooting light shown is civil twilight; check your state's legal hours. Solunar times are popular folklore, not proven science.<br>Imagery: USGS, Esri. Elevation: <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a> (Mapzen). Weather: <a href="https://open-meteo.com">Open-Meteo</a>. Sun/moon: SunCalc.</p>
+    <p class="fine">Thermals are modeled from sun angle on each slope, cloud cover, and wind. It's a planning tool, so confirm in the field with a puffer or milkweed. Public land data can lag reality and doesn't show every access rule; always check your state's regulations and posted boundaries. Shooting light shown is civil twilight; check your state's legal hours. Solunar times are folklore, not proven science.<br>Imagery: USGS, Esri. Elevation: <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a> (Mapzen). Public land: USGS PAD-US 4.1. Weather: <a href="https://open-meteo.com">Open-Meteo</a>. Sun/moon: SunCalc.</p>
   </div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -72,17 +75,41 @@ const DIRS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','
 const compass=d=>DIRS[Math.round((((d%360)+360)%360)/22.5)%16];
 const fmtT=d=>d&&!isNaN(d)?d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'—';
 const pad=n=>String(n).padStart(2,'0');
+const T=0.2;
 
 const map=L.map('map',{zoomControl:false}).setView([38.5,-92.5],6);
 const hyb=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:16,attribution:'USGS'});
 const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Esri, Maxar, Earthstar Geographics'});
 const topo=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:16,attribution:'USGS'});
 hyb.addTo(map);
-L.control.layers({'Satellite + topo':hyb,'Satellite':sat,'Topo':topo},null,{position:'topright'}).addTo(map);
 
-let selDate=new Date(); selDate.setHours(0,0,0,0);
+function landColor(p){switch(p.Mang_Type){case'FED':return'#f2b134';case'STAT':return'#8f6cf0';case'LOC':case'DIST':return'#9acd32';case'TRIB':return'#c9b89a';case'NGO':case'PVT':return'#e68d45';default:return'#d9a5a4'}}
+const landLayer=L.geoJSON(null,{interactive:false,style:f=>{const c=landColor(f.properties||{});return{color:c,weight:2,fillColor:c,fillOpacity:.22}}});
+let landOn=localStorage.getItem('ts_land')!=='0',landFeats=[],landTok=0;
+if(landOn)landLayer.addTo(map);
+L.control.layers({'Satellite + topo':hyb,'Satellite':sat,'Topo':topo},{'Public land':landLayer},{position:'topright'}).addTo(map);
+map.on('overlayadd',e=>{if(e.layer===landLayer){landOn=true;localStorage.setItem('ts_land','1');loadLand();dirty=true}});
+map.on('overlayremove',e=>{if(e.layer===landLayer){landOn=false;localStorage.setItem('ts_land','0');landFeats=[];dirty=true}});
+async function loadLand(){
+  if(!landOn||map.getZoom()<11){landLayer.clearLayers();landFeats=[];return}
+  const tok=++landTok,b=map.getBounds().pad(0.2),tol=(360/(256*2**map.getZoom())).toFixed(7);
+  const url='https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/Fee_Managers_PADUS/FeatureServer/0/query?where=1%3D1'+
+    `&geometry=${b.getWest().toFixed(5)},${b.getSouth().toFixed(5)},${b.getEast().toFixed(5)},${b.getNorth().toFixed(5)}`+
+    '&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Unit_Nm,Loc_Nm,Mang_Name,Loc_Mang,Mang_Type,Pub_Access,GIS_Acres'+
+    `&outSR=4326&geometryPrecision=6&maxAllowableOffset=${tol}&f=geojson`;
+  try{const r=await fetch(url),j=await r.json();if(tok!==landTok)return;landLayer.clearLayers();if(j.features){landLayer.addData(j);landFeats=j.features}else landFeats=[];dirty=true}catch(e){}}
+function inRing(x,y,r){let ins=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins}return ins}
+function inPoly(x,y,rings){if(!inRing(x,y,rings[0]))return false;for(let k=1;k<rings.length;k++)if(inRing(x,y,rings[k]))return false;return true}
+function landAt(lat,lng){for(const f of landFeats){const g=f.geometry;if(!g)continue;const ps=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];for(const p of ps)if(inPoly(lng,lat,p))return f.properties}return null}
+const ACC={OA:'Open access',RA:'Restricted access',XA:'Closed',UK:'Access unknown'};
+function landText(lat,lng){if(!landOn)return'Layer off';if(map.getZoom()<11)return'Zoom in to check';const p=landAt(lat,lng);
+  if(!p)return'Not in public database (likely private)';const nm=p.Unit_Nm||p.Loc_Nm||'Public land',ac=ACC[p.Pub_Access]||'Access unknown';
+  if(p.Mang_Type==='PVT'||p.Mang_Type==='NGO')return`${nm} · private conservation · ${ac}`;
+  return`${nm} · ${ac}${p.GIS_Acres?' · '+Number(p.GIS_Acres).toLocaleString()+' ac':''}`}
+
+let selDate=new Date();selDate.setHours(0,0,0,0);
 let minutes=new Date().getHours()*60+new Date().getMinutes();
-let playing=false,mode='stand',moving=false,manual=null,wx=null,wxKey='',elev=null,elevTok=0;
+let playing=false,mode='stand',moving=false,manual=null,wx=null,wxKey='',elev=null,elevTok=0,dirty=true;
 let markers=JSON.parse(localStorage.getItem('ts_markers')||'[]');
 let activeId=localStorage.getItem('ts_active');
 let me=null;
@@ -118,29 +145,33 @@ function slope(cx,cy){if(!elev)return null;const[x,y]=gridXY(cx,cy),s=2,w=elev.w
   if(x<s||y<s||x>=w-s||y>=elev.h-s)return null;
   return{e:(E[y*w+x+s]-E[y*w+x-s])/(2*s*elev.mpp),n:-(E[(y+s)*w+x]-E[(y-s)*w+x])/(2*s*elev.mpp)}}
 
-function baseThermal(d,st){const t=d.getTime(),sr=st.sunrise.getTime(),ss=st.sunset.getTime(),h=36e5;
-  if(isNaN(sr)||isNaN(ss))return 0;
-  if(t<sr+.67*h)return -1;if(t<sr+2.67*h)return -1+(t-sr-.67*h)/h;
-  if(t<ss-2*h)return 1;if(t<ss-.25*h)return 1-2*(t-(ss-2*h))/(1.75*h);return -1}
-function localS(s0,ge,gn,sun){if(sun.alt<=0)return s0;const nz=1/Math.sqrt(ge*ge+gn*gn+1),nx=-ge*nz,ny=-gn*nz;
+function sAt(ge,gn,E){const sun=E.sun;if(sun.alt<=0)return -1;
   const ca=Math.cos(sun.alt),sx=-Math.sin(sun.az)*ca,sy=-Math.cos(sun.az)*ca,sz=Math.sin(sun.alt);
-  const il=Math.max(0,nx*sx+ny*sy+nz*sz);return clamp(s0+1.8*(il-sz)*sun.amp,-1,1)}
+  const nz=1/Math.sqrt(ge*ge+gn*gn+1),il=Math.max(0,(-ge*sx-gn*sy+sz)*nz);
+  const sl=clamp((il*E.cf-T)/T,-1,1),fl=clamp((sz*E.cf-T)/T,-1,1);return .6*sl+.4*fl}
 
 function hourData(d){if(!wx)return null;const k=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
   const i=wx.time.indexOf(k);if(i<0)return null;
   return{dir:wx.wind_direction_10m[i],spd:wx.wind_speed_10m[i],gust:wx.wind_gusts_10m[i],temp:wx.temperature_2m[i],cloud:wx.cloud_cover[i],rain:wx.precipitation_probability[i]}}
 function windNow(d){const h=hourData(d);if(manual)return{...(h||{}),dir:manual.dir,spd:manual.spd,manual:true};return h||{dir:0,spd:0,cloud:0,none:true}}
 async function maybeWx(){const p=refPt(),k=p.lat.toFixed(1)+','+p.lng.toFixed(1);if(k===wxKey)return;wxKey=k;
-  try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat.toFixed(3)}&longitude=${p.lng.toFixed(3)}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation_probability&wind_speed_unit=mph&temperature_unit=fahrenheit&past_days=1&forecast_days=16`.replace('&past','&timezone=auto&past'));
-    wx=(await r.json()).hourly}catch(e){wx=null;wxKey=''}}
+  try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat.toFixed(3)}&longitude=${p.lng.toFixed(3)}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation_probability&wind_speed_unit=mph&temperature_unit=fahrenheit&timezone=auto&past_days=1&forecast_days=16`);
+    wx=(await r.json()).hourly;dirty=true}catch(e){wx=null;wxKey=''}}
 
 function env(){const d=curTime(),p=refPt(),noon=new Date(selDate.getTime()+12*36e5);
   const st=SunCalc.getTimes(noon,p.lat,p.lng),sp=SunCalc.getPosition(d,p.lat,p.lng),w=windNow(d);
-  const amp=1-.55*(w.cloud||0)/100,s0=baseThermal(d,st)*amp,rad=w.dir*Math.PI/180,v=w.spd*.35*.25;
-  return{d,p,st,s0,w,sun:{alt:sp.altitude,az:sp.azimuth,amp},wv:{x:-Math.sin(rad)*v,y:Math.cos(rad)*v}}}
+  const cf=1-.7*(w.cloud||0)/100,rad=w.dir*Math.PI/180,v=w.spd*.35*.25;
+  const E={d,p,st,w,cf,sun:{alt:sp.altitude,az:sp.azimuth},wv:{x:-Math.sin(rad)*v,y:Math.cos(rad)*v}};E.s0=sAt(0,0,E);return E}
 function flow(x,y,E){const g=slope(x,y);if(!g)return{vx:E.wv.x,vy:E.wv.y,s:E.s0,g:null};
-  const gm=Math.hypot(g.e,g.n),s=localS(E.s0,g.e,g.n,E.sun),sf=Math.min(1,gm/.15)*.8+.2,damp=1-Math.min(E.w.spd/14,.75),th=s*1.3*sf*damp;
+  const gm=Math.hypot(g.e,g.n),s=sAt(g.e,g.n,E),sf=Math.min(1,gm/.15)*.8+.2,damp=1-Math.min(E.w.spd/14,.75),th=s*1.3*sf*damp;
   const ux=gm>1e-4?g.e/gm:0,uy=gm>1e-4?-g.n/gm:0;return{vx:th*ux+E.wv.x,vy:th*uy+E.wv.y,s,g}}
+
+let swCache={k:'',v:null};
+function switchTimes(p){const k=selDate.toDateString()+p.lat.toFixed(2)+p.lng.toFixed(2)+(wx?'w':'')+(manual?'m':'');if(swCache.k===k)return swCache.v;
+  let am=null,pm=null,prev=null;
+  for(let m=0;m<1440;m+=5){const d=new Date(selDate.getTime()+m*6e4),sp=SunCalc.getPosition(d,p.lat,p.lng),h=hourData(d),cf=1-.7*((h&&h.cloud)||0)/100;
+    const v=sp.altitude>0?Math.sin(sp.altitude)*cf-T:-1;if(prev!==null){if(prev<0&&v>=0&&!am)am=d;if(prev>=0&&v<0)pm=d}prev=v}
+  swCache={k,v:{am,pm}};return swCache.v}
 
 let amb=[],scent=[];
 function rp(){return{x:Math.random()*W,y:Math.random()*H,vx:0,vy:0,life:80+Math.random()*180,s:0}}
@@ -156,12 +187,15 @@ const mLayer=L.layerGroup().addTo(map);
 function drawMarkers(){mLayer.clearLayers();const a=activeStand();
   markers.forEach(m=>{const on=a&&a.id===m.id;
     const ic=L.divIcon({className:'',html:`<div class="mk" style="background:${COL[m.type]};${on?'box-shadow:0 0 0 3px #ffd54a':''}">${LET[m.type]}</div>`,iconSize:[24,24],iconAnchor:[12,12]});
-    L.marker([m.lat,m.lng],{icon:ic}).bindPopup(`<b>${NAME[m.type]}</b><br>${m.type==='stand'?`<button data-act="use" data-id="${m.id}">Use this stand</button>`:''}<button data-act="del" data-id="${m.id}">Delete</button>`).addTo(mLayer)})}
+    const mk=L.marker([m.lat,m.lng],{icon:ic}).addTo(mLayer);
+    mk.bindPopup(()=>`<b>${NAME[m.type]}</b><br><small>${landText(m.lat,m.lng)}</small><br>${m.type==='stand'?`<button data-act="use" data-id="${m.id}">Use this stand</button>`:''}<button data-act="del" data-id="${m.id}">Delete</button>`)})}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id;
   if(b.dataset.act==='del'){markers=markers.filter(m=>m.id!==id);if(activeId===id)activeId=null}
   if(b.dataset.act==='use')activeId=id;
   save();map.closePopup();drawMarkers();scent=[];maybeWx()});
-map.on('click',e=>{if(mode==='none')return;const m={id:Date.now().toString(36),type:mode,lat:e.latlng.lat,lng:e.latlng.lng};markers.push(m);
+map.on('click',e=>{
+  if(mode==='none'){L.popup().setLatLng(e.latlng).setContent(`<b>Land here</b><br>${landText(e.latlng.lat,e.latlng.lng)}`).openOn(map);return}
+  const m={id:Date.now().toString(36),type:mode,lat:e.latlng.lat,lng:e.latlng.lng};markers.push(m);
   if(mode==='stand'){activeId=m.id;scent=[]}save();drawMarkers();maybeWx()});
 
 let moonCache={k:'',v:null};
@@ -170,15 +204,15 @@ function moonDay(p){const k=selDate.toDateString()+p.lat.toFixed(2)+p.lng.toFixe
   const mt=SunCalc.getMoonTimes(selDate,p.lat,p.lng),il=SunCalc.getMoonIllumination(new Date(selDate.getTime()+12*36e5));
   moonCache={k,v:{over:th,under:tl,rise:mt.rise,set:mt.set,il}};return moonCache.v}
 function phaseName(f){if(f<.03||f>.97)return'New';if(f<.22)return'Waxing crescent';if(f<.28)return'First quarter';if(f<.47)return'Waxing gibbous';if(f<.53)return'Full';if(f<.72)return'Waning gibbous';if(f<.78)return'Last quarter';return'Waning crescent'}
-const cell=(l,v)=>`<div class="cell"><small>${l}</small><b>${v}</b></div>`;
-const add=(d,min)=>new Date(d.getTime()+min*6e4);
+const cell=(l,v,w)=>`<div class="cell${w?' wide':''}"><small>${l}</small><b>${v}</b></div>`;
+const add=(d,min)=>d?new Date(d.getTime()+min*6e4):null;
 
 function updateUI(E,hits){const t=E.d;
   $('clock').textContent=t.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})+' · '+fmtT(t);
   $('timeV').textContent=fmtT(t);$('time').value=minutes;
   const st=activeStand();let s=E.s0,alert='Tap the map to drop your stand.',bad=false,ft='—';
   if(st){const sp=map.latLngToContainerPoint([st.lat,st.lng]),f=flow(sp.x,sp.y,E);s=f.s;
-    const ee=-f.vx,nn=f.vy;const hd=Math.atan2(f.vx,-f.vy)*180/Math.PI;
+    const hd=Math.atan2(f.vx,-f.vy)*180/Math.PI;
     let dirTxt='';if(f.g){const up=f.vx*f.g.e+(-f.vy)*f.g.n;dirTxt=up>0.02?' (uphill)':up<-0.02?' (downhill)':''}
     alert=`Scent drifting toward ${compass(hd)}${dirTxt}.`;
     const el=elevAt(sp.x,sp.y);if(el!=null)ft=Math.round(el*3.281)+' ft';
@@ -191,17 +225,19 @@ function updateUI(E,hits){const t=E.d;
   if(!manual&&!E.w.none){$('wd').value=Math.round(E.w.dir/10)*10;$('ws').value=Math.round(E.w.spd)}
   $('wdV').textContent=compass(E.w.dir)+(E.w.manual?' (set)':'');$('wsV').textContent=Math.round(E.w.spd)+' mph';
   if($('sheet').classList.contains('min'))return;
-  const S=E.st,M=moonDay(E.p);
+  const S=E.st,M=moonDay(E.p),SW=switchTimes(E.p);
+  const swTxt=SW.am?`AM ~${fmtT(SW.am)} · PM ~${fmtT(SW.pm)}`:'Weak all day (cloudy)';
   $('info').innerHTML=
+    (st?cell('Land at stand',landText(st.lat,st.lng),true):'')+
     cell('Sunrise',fmtT(S.sunrise))+cell('Sunset',fmtT(S.sunset))+
-    cell('Shooting light*',fmtT(S.dawn)+' – '+fmtT(S.dusk))+cell('Thermal switch',`AM ~${fmtT(add(S.sunrise,100))} · PM ~${fmtT(add(S.sunset,-67))}`)+
+    cell('Shooting light*',fmtT(S.dawn)+' – '+fmtT(S.dusk))+cell('Thermal switch (flat ground)',swTxt)+
     cell('Moon',`${phaseName(M.il.phase)} ${Math.round(M.il.fraction*100)}%`)+cell('Moonrise / set',fmtT(M.rise)+' / '+fmtT(M.set))+
     cell('Major (overhead)',fmtT(add(M.over,-60))+' – '+fmtT(add(M.over,60)))+cell('Major (underfoot)',fmtT(add(M.under,-60))+' – '+fmtT(add(M.under,60)))+
     cell('Wind',E.w.none?'—':`${compass(E.w.dir)} ${Math.round(E.w.spd)} mph${E.w.gust!=null?' g'+Math.round(E.w.gust):''}`)+
     cell('Temp · clouds',E.w.temp!=null?`${Math.round(E.w.temp)}°F · ${Math.round(E.w.cloud)}%`:'—')+
     cell('Rain chance',E.w.rain!=null?Math.round(E.w.rain)+'%':'—')+cell('Stand elevation',ft)}
 
-let lastUI=0,dirty=true;
+let lastUI=0;
 function frame(now){if(playing){minutes=(minutes+1)%1440;dirty=true}
   ctx.clearRect(0,0,W,H);
   if(!moving){const E=env(),hits={};
@@ -219,7 +255,7 @@ function frame(now){if(playing){minutes=(minutes+1)%1440;dirty=true}
 
 let mt;
 map.on('movestart',()=>{moving=true;scent=[]});
-map.on('moveend',()=>{moving=false;clearTimeout(mt);mt=setTimeout(()=>{buildElev();maybeWx()},250)});
+map.on('moveend',()=>{moving=false;clearTimeout(mt);mt=setTimeout(()=>{buildElev();maybeWx();loadLand()},250)});
 window.addEventListener('resize',()=>{resizeFx();buildElev()});
 map.on('locationfound',e=>{if(me)me.remove();me=L.circleMarker(e.latlng,{radius:7,color:'#fff',weight:2,fillColor:'#2f80ed',fillOpacity:1}).addTo(map)});
 map.on('locationerror',()=>{$('alert').textContent='Location unavailable. Pan to your property instead.'});
@@ -239,7 +275,7 @@ $('grab').onclick=()=>{const s=$('sheet');s.classList.toggle('min');$('grab').te
 resizeFx();drawMarkers();
 if(markers.length)map.fitBounds(L.latLngBounds(markers.map(m=>[m.lat,m.lng])).pad(0.6),{maxZoom:16});
 else map.locate({setView:true,maxZoom:15});
-buildElev();maybeWx();requestAnimationFrame(frame);
+buildElev();maybeWx();loadLand();requestAnimationFrame(frame);
 </script>
 </body>
 </html>
