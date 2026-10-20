@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Thermals">
+<meta name="theme-color" content="#14171a">
+<title>Thermal Scout</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#14171a;color:#e8e6e1;font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif;overflow:hidden}
+#map{position:absolute;inset:0}
+#fx{position:absolute;inset:0;pointer-events:none;z-index:450}
+.leaflet-top{top:env(safe-area-inset-top)}
+#top{position:absolute;top:calc(env(safe-area-inset-top) + 10px);left:10px;z-index:1000;display:flex;flex-direction:column;gap:6px}
+.pill{background:rgba(20,23,26,.88);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:6px 10px;font-size:14px}
+#badge.r{background:#8a2020}#badge.f{background:#164a80}#badge.n{background:#55554f}
+#sheet{position:absolute;left:0;right:0;bottom:0;z-index:1000;background:rgba(20,23,26,.95);border-top:1px solid rgba(255,255,255,.12);border-radius:14px 14px 0 0;padding:6px 12px calc(env(safe-area-inset-bottom) + 10px);max-height:65vh;overflow-y:auto}
+#grab{display:block;margin:0 auto 6px;padding:4px 14px;font-size:13px}
+#sheet.min .more{display:none}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.row label{font-size:13px;color:#a9a7a0;min-width:74px}
+.row input[type=range]{flex:1}
+.v{font-size:13px;min-width:66px;text-align:right}
+button,.chip,input[type=date]{background:#23272b;color:#e8e6e1;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px 10px;font-size:14px}
+.chip.on{background:#e8e6e1;color:#14171a}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.cell{background:#1d2125;border-radius:8px;padding:7px 9px}
+.cell small{display:block;color:#a9a7a0;font-size:11px}
+.cell b{font-weight:600;font-size:14px}
+#alert{font-size:13px;margin:6px 0;color:#a9a7a0}
+#alert.bad{color:#ff8a80}
+.legend{display:flex;gap:12px;font-size:12px;color:#a9a7a0;margin:2px 0}
+.d{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:1px solid #000}
+.mk{width:24px;height:24px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font:700 11px sans-serif;color:#fff}
+.leaflet-popup-content button{margin:4px 4px 0 0;padding:6px 8px;font-size:13px}
+.fine{font-size:11px;color:#77756f;line-height:1.4}
+.fine a{color:#9a988f}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<canvas id="fx"></canvas>
+<div id="top"><div class="pill" id="badge">Loading terrain…</div><div class="pill" id="clock">--</div></div>
+<div id="sheet" class="min">
+  <button id="grab">More ▴</button>
+  <div class="legend"><span><span class="d" style="background:#e24b4a"></span>Rising</span><span><span class="d" style="background:#378add"></span>Falling</span><span><span class="d" style="background:#fff"></span>Neutral</span><span>Big dots = your scent</span></div>
+  <div id="alert">Tap the map to drop your stand.</div>
+  <div class="row"><label>Time</label><input id="time" type="range" min="0" max="1439" step="5"><span class="v" id="timeV"></span></div>
+  <div class="chips"><button id="play">▶ Play</button><button id="now">Now</button><button id="loc">My location</button><input id="date" type="date"></div>
+  <div class="more">
+    <div class="chips" style="margin-top:10px"><span style="font-size:13px;color:#a9a7a0">Tap adds:</span>
+      <button class="chip on" data-m="stand">Stand</button><button class="chip" data-m="bed">Bedding</button><button class="chip" data-m="food">Food</button><button class="chip" data-m="none">Nothing</button></div>
+    <div class="grid" id="info"></div>
+    <div class="row"><label>Wind from</label><input id="wd" type="range" min="0" max="350" step="10"><span class="v" id="wdV"></span></div>
+    <div class="row"><label>Wind mph</label><input id="ws" type="range" min="0" max="25" step="1"><span class="v" id="wsV"></span></div>
+    <div class="chips"><button id="live">Use forecast wind</button></div>
+    <p class="fine">Simplified thermal model for planning. Always confirm in the field with a puffer or milkweed. Shooting light shown is civil twilight; check your state's legal hours. Solunar times are popular folklore, not proven science.<br>Imagery: USGS, Esri. Elevation: <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a> (Mapzen). Weather: <a href="https://open-meteo.com">Open-Meteo</a>. Sun/moon: SunCalc.</p>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const DIRS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const compass=d=>DIRS[Math.round((((d%360)+360)%360)/22.5)%16];
+const fmtT=d=>d&&!isNaN(d)?d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'—';
+const pad=n=>String(n).padStart(2,'0');
+
+const map=L.map('map',{zoomControl:false}).setView([38.5,-92.5],6);
+const hyb=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:16,attribution:'USGS'});
+const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Esri, Maxar, Earthstar Geographics'});
+const topo=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:16,attribution:'USGS'});
+hyb.addTo(map);
+L.control.layers({'Satellite + topo':hyb,'Satellite':sat,'Topo':topo},null,{position:'topright'}).addTo(map);
+
+let selDate=new Date(); selDate.setHours(0,0,0,0);
+let minutes=new Date().getHours()*60+new Date().getMinutes();
+let playing=false,mode='stand',moving=false,manual=null,wx=null,wxKey='',elev=null,elevTok=0;
+let markers=JSON.parse(localStorage.getItem('ts_markers')||'[]');
+let activeId=localStorage.getItem('ts_active');
+let me=null;
+
+function save(){localStorage.setItem('ts_markers',JSON.stringify(markers));localStorage.setItem('ts_active',activeId||'')}
+function curTime(){return new Date(selDate.getTime()+minutes*6e4)}
+function activeStand(){return markers.find(m=>m.id===activeId&&m.type==='stand')||markers.find(m=>m.type==='stand')}
+function refPt(){const s=activeStand();return s?{lat:s.lat,lng:s.lng}:map.getCenter()}
+
+const fx=$('fx'),ctx=fx.getContext('2d');let W=0,H=0;
+function resizeFx(){const dpr=window.devicePixelRatio||1;W=fx.clientWidth;H=fx.clientHeight;fx.width=W*dpr;fx.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+
+function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=src})}
+async function buildElev(){
+  const tok=++elevTok,z=map.getZoom(),ez=clamp(Math.round(z),5,15),sc=Math.pow(2,ez-z),pb=map.getPixelBounds(),n=2**ez;
+  const x0=Math.floor(pb.min.x*sc/256),y0=Math.floor(pb.min.y*sc/256),x1=Math.floor(pb.max.x*sc/256),y1=Math.floor(pb.max.y*sc/256);
+  const cols=x1-x0+1,rows=y1-y0+1;if(cols*rows>64)return;
+  const c=document.createElement('canvas');c.width=cols*256;c.height=rows*256;const g=c.getContext('2d',{willReadFrequently:true});
+  const jobs=[];
+  for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){if(ty<0||ty>=n)continue;const wrap=((tx%n)+n)%n;
+    jobs.push(loadImg(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${ez}/${wrap}/${ty}.png`).then(im=>g.drawImage(im,(tx-x0)*256,(ty-y0)*256)).catch(()=>{}))}
+  await Promise.all(jobs);if(tok!==elevTok)return;
+  let px;try{px=g.getImageData(0,0,c.width,c.height).data}catch(e){$('badge').textContent='Elevation blocked';return}
+  const e=new Float32Array(c.width*c.height);
+  for(let i=0;i<e.length;i++){const k=i*4;e[i]=px[k]*256+px[k+1]+px[k+2]/256-32768}
+  const lat=map.getCenter().lat;
+  elev={sc,ox:x0*256,oy:y0*256,w:c.width,h:c.height,e,mpp:156543.034*Math.cos(lat*Math.PI/180)/n,pbx:pb.min.x,pby:pb.min.y};
+  resetParticles();
+}
+function gridXY(cx,cy){return[Math.round((elev.pbx+cx)*elev.sc-elev.ox),Math.round((elev.pby+cy)*elev.sc-elev.oy)]}
+function elevAt(cx,cy){if(!elev)return null;let[x,y]=gridXY(cx,cy);if(x<0||y<0||x>=elev.w||y>=elev.h)return null;return elev.e[y*elev.w+x]}
+function slope(cx,cy){if(!elev)return null;const[x,y]=gridXY(cx,cy),s=2,w=elev.w,E=elev.e;
+  if(x<s||y<s||x>=w-s||y>=elev.h-s)return null;
+  return{e:(E[y*w+x+s]-E[y*w+x-s])/(2*s*elev.mpp),n:-(E[(y+s)*w+x]-E[(y-s)*w+x])/(2*s*elev.mpp)}}
+
+function baseThermal(d,st){const t=d.getTime(),sr=st.sunrise.getTime(),ss=st.sunset.getTime(),h=36e5;
+  if(isNaN(sr)||isNaN(ss))return 0;
+  if(t<sr+.67*h)return -1;if(t<sr+2.67*h)return -1+(t-sr-.67*h)/h;
+  if(t<ss-2*h)return 1;if(t<ss-.25*h)return 1-2*(t-(ss-2*h))/(1.75*h);return -1}
+function localS(s0,ge,gn,sun){if(sun.alt<=0)return s0;const nz=1/Math.sqrt(ge*ge+gn*gn+1),nx=-ge*nz,ny=-gn*nz;
+  const ca=Math.cos(sun.alt),sx=-Math.sin(sun.az)*ca,sy=-Math.cos(sun.az)*ca,sz=Math.sin(sun.alt);
+  const il=Math.max(0,nx*sx+ny*sy+nz*sz);return clamp(s0+1.8*(il-sz)*sun.amp,-1,1)}
+
+function hourData(d){if(!wx)return null;const k=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+  const i=wx.time.indexOf(k);if(i<0)return null;
+  return{dir:wx.wind_direction_10m[i],spd:wx.wind_speed_10m[i],gust:wx.wind_gusts_10m[i],temp:wx.temperature_2m[i],cloud:wx.cloud_cover[i],rain:wx.precipitation_probability[i]}}
+function windNow(d){const h=hourData(d);if(manual)return{...(h||{}),dir:manual.dir,spd:manual.spd,manual:true};return h||{dir:0,spd:0,cloud:0,none:true}}
+async function maybeWx(){const p=refPt(),k=p.lat.toFixed(1)+','+p.lng.toFixed(1);if(k===wxKey)return;wxKey=k;
+  try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat.toFixed(3)}&longitude=${p.lng.toFixed(3)}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation_probability&wind_speed_unit=mph&temperature_unit=fahrenheit&past_days=1&forecast_days=16`.replace('&past','&timezone=auto&past'));
+    wx=(await r.json()).hourly}catch(e){wx=null;wxKey=''}}
+
+function env(){const d=curTime(),p=refPt(),noon=new Date(selDate.getTime()+12*36e5);
+  const st=SunCalc.getTimes(noon,p.lat,p.lng),sp=SunCalc.getPosition(d,p.lat,p.lng),w=windNow(d);
+  const amp=1-.55*(w.cloud||0)/100,s0=baseThermal(d,st)*amp,rad=w.dir*Math.PI/180,v=w.spd*.35*.25;
+  return{d,p,st,s0,w,sun:{alt:sp.altitude,az:sp.azimuth,amp},wv:{x:-Math.sin(rad)*v,y:Math.cos(rad)*v}}}
+function flow(x,y,E){const g=slope(x,y);if(!g)return{vx:E.wv.x,vy:E.wv.y,s:E.s0,g:null};
+  const gm=Math.hypot(g.e,g.n),s=localS(E.s0,g.e,g.n,E.sun),sf=Math.min(1,gm/.15)*.8+.2,damp=1-Math.min(E.w.spd/14,.75),th=s*1.3*sf*damp;
+  const ux=gm>1e-4?g.e/gm:0,uy=gm>1e-4?-g.n/gm:0;return{vx:th*ux+E.wv.x,vy:th*uy+E.wv.y,s,g}}
+
+let amb=[],scent=[];
+function rp(){return{x:Math.random()*W,y:Math.random()*H,vx:0,vy:0,life:80+Math.random()*180,s:0}}
+function resetParticles(){amb=[];for(let i=0;i<300;i++)amb.push(rp());scent=[]}
+function move(p,E){const f=flow(p.x,p.y,E),j=Math.abs(f.s)<.2?.7:.25;
+  p.vx=p.vx*.85+f.vx*.15+(Math.random()-.5)*j;p.vy=p.vy*.85+f.vy*.15+(Math.random()-.5)*j;p.x+=p.vx;p.y+=p.vy;p.life--;p.s=f.s}
+function dot(p,r,a){const c=p.s>.2?'226,75,74':p.s<-.2?'55,138,221':'255,255,255';
+  ctx.fillStyle=`rgba(${c},${a})`;ctx.beginPath();ctx.arc(p.x,p.y,r,0,6.283);ctx.fill();ctx.strokeStyle=`rgba(0,0,0,${a*.6})`;ctx.lineWidth=.7;ctx.stroke()}
+function hitR(){const m=156543.034*Math.cos(map.getCenter().lat*Math.PI/180)/2**map.getZoom();return clamp(75/m,14,90)}
+
+const COL={stand:'#e07a1f',bed:'#8b5a2b',food:'#3b8f3b'},LET={stand:'S',bed:'B',food:'F'},NAME={stand:'Stand',bed:'Bedding',food:'Food'};
+const mLayer=L.layerGroup().addTo(map);
+function drawMarkers(){mLayer.clearLayers();const a=activeStand();
+  markers.forEach(m=>{const on=a&&a.id===m.id;
+    const ic=L.divIcon({className:'',html:`<div class="mk" style="background:${COL[m.type]};${on?'box-shadow:0 0 0 3px #ffd54a':''}">${LET[m.type]}</div>`,iconSize:[24,24],iconAnchor:[12,12]});
+    L.marker([m.lat,m.lng],{icon:ic}).bindPopup(`<b>${NAME[m.type]}</b><br>${m.type==='stand'?`<button data-act="use" data-id="${m.id}">Use this stand</button>`:''}<button data-act="del" data-id="${m.id}">Delete</button>`).addTo(mLayer)})}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id;
+  if(b.dataset.act==='del'){markers=markers.filter(m=>m.id!==id);if(activeId===id)activeId=null}
+  if(b.dataset.act==='use')activeId=id;
+  save();map.closePopup();drawMarkers();scent=[];maybeWx()});
+map.on('click',e=>{if(mode==='none')return;const m={id:Date.now().toString(36),type:mode,lat:e.latlng.lat,lng:e.latlng.lng};markers.push(m);
+  if(mode==='stand'){activeId=m.id;scent=[]}save();drawMarkers();maybeWx()});
+
+let moonCache={k:'',v:null};
+function moonDay(p){const k=selDate.toDateString()+p.lat.toFixed(2)+p.lng.toFixed(2);if(moonCache.k===k)return moonCache.v;
+  let hi=-9,lo=9,th=null,tl=null;for(let m=0;m<1440;m+=10){const d=new Date(selDate.getTime()+m*6e4),a=SunCalc.getMoonPosition(d,p.lat,p.lng).altitude;if(a>hi){hi=a;th=d}if(a<lo){lo=a;tl=d}}
+  const mt=SunCalc.getMoonTimes(selDate,p.lat,p.lng),il=SunCalc.getMoonIllumination(new Date(selDate.getTime()+12*36e5));
+  moonCache={k,v:{over:th,under:tl,rise:mt.rise,set:mt.set,il}};return moonCache.v}
+function phaseName(f){if(f<.03||f>.97)return'New';if(f<.22)return'Waxing crescent';if(f<.28)return'First quarter';if(f<.47)return'Waxing gibbous';if(f<.53)return'Full';if(f<.72)return'Waning gibbous';if(f<.78)return'Last quarter';return'Waning crescent'}
+const cell=(l,v)=>`<div class="cell"><small>${l}</small><b>${v}</b></div>`;
+const add=(d,min)=>new Date(d.getTime()+min*6e4);
+
+function updateUI(E,hits){const t=E.d;
+  $('clock').textContent=t.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})+' · '+fmtT(t);
+  $('timeV').textContent=fmtT(t);$('time').value=minutes;
+  const st=activeStand();let s=E.s0,alert='Tap the map to drop your stand.',bad=false,ft='—';
+  if(st){const sp=map.latLngToContainerPoint([st.lat,st.lng]),f=flow(sp.x,sp.y,E);s=f.s;
+    const ee=-f.vx,nn=f.vy;const hd=Math.atan2(f.vx,-f.vy)*180/Math.PI;
+    let dirTxt='';if(f.g){const up=f.vx*f.g.e+(-f.vy)*f.g.n;dirTxt=up>0.02?' (uphill)':up<-0.02?' (downhill)':''}
+    alert=`Scent drifting toward ${compass(hd)}${dirTxt}.`;
+    const el=elevAt(sp.x,sp.y);if(el!=null)ft=Math.round(el*3.281)+' ft';
+    const hit=markers.filter(m=>(hits[m.id]||0)>4);
+    if(hit.length){bad=true;alert+=' Reaching: '+[...new Set(hit.map(m=>NAME[m.type].toLowerCase()))].join(' and ')+'!'}}
+  if(map.getZoom()<13)alert='Zoom in to your property for accurate terrain. '+alert;
+  if(E.w.none&&!wx)alert+=' (No forecast wind loaded.)';
+  $('alert').textContent=alert;$('alert').className=bad?'bad':'';
+  const b=$('badge');b.className=s>.2?'pill r':s<-.2?'pill f':'pill n';b.textContent=s>.2?'Thermals rising':s<-.2?'Thermals falling':'Thermals switching';
+  if(!manual&&!E.w.none){$('wd').value=Math.round(E.w.dir/10)*10;$('ws').value=Math.round(E.w.spd)}
+  $('wdV').textContent=compass(E.w.dir)+(E.w.manual?' (set)':'');$('wsV').textContent=Math.round(E.w.spd)+' mph';
+  if($('sheet').classList.contains('min'))return;
+  const S=E.st,M=moonDay(E.p);
+  $('info').innerHTML=
+    cell('Sunrise',fmtT(S.sunrise))+cell('Sunset',fmtT(S.sunset))+
+    cell('Shooting light*',fmtT(S.dawn)+' – '+fmtT(S.dusk))+cell('Thermal switch',`AM ~${fmtT(add(S.sunrise,100))} · PM ~${fmtT(add(S.sunset,-67))}`)+
+    cell('Moon',`${phaseName(M.il.phase)} ${Math.round(M.il.fraction*100)}%`)+cell('Moonrise / set',fmtT(M.rise)+' / '+fmtT(M.set))+
+    cell('Major (overhead)',fmtT(add(M.over,-60))+' – '+fmtT(add(M.over,60)))+cell('Major (underfoot)',fmtT(add(M.under,-60))+' – '+fmtT(add(M.under,60)))+
+    cell('Wind',E.w.none?'—':`${compass(E.w.dir)} ${Math.round(E.w.spd)} mph${E.w.gust!=null?' g'+Math.round(E.w.gust):''}`)+
+    cell('Temp · clouds',E.w.temp!=null?`${Math.round(E.w.temp)}°F · ${Math.round(E.w.cloud)}%`:'—')+
+    cell('Rain chance',E.w.rain!=null?Math.round(E.w.rain)+'%':'—')+cell('Stand elevation',ft)}
+
+let lastUI=0,dirty=true;
+function frame(now){if(playing){minutes=(minutes+1)%1440;dirty=true}
+  ctx.clearRect(0,0,W,H);
+  if(!moving){const E=env(),hits={};
+    for(const p of amb){move(p,E);if(p.life<=0||p.x<0||p.y<0||p.x>W||p.y>H)Object.assign(p,rp());dot(p,1.6,.6)}
+    const st=activeStand();
+    if(st){const sp=map.latLngToContainerPoint([st.lat,st.lng]);
+      for(let k=0;k<3;k++)scent.push({x:sp.x+(Math.random()-.5)*6,y:sp.y+(Math.random()-.5)*6,vx:0,vy:0,life:300,max:300,s:0});
+      const tg=markers.filter(m=>m.type!=='stand').map(m=>({m,p:map.latLngToContainerPoint([m.lat,m.lng])})),r=hitR();
+      for(let i=scent.length-1;i>=0;i--){const p=scent[i];move(p,E);
+        if(p.life<=0||p.x<-20||p.y<-20||p.x>W+20||p.y>H+20){scent.splice(i,1);continue}
+        for(const t of tg)if(Math.hypot(p.x-t.p.x,p.y-t.p.y)<r)hits[t.m.id]=(hits[t.m.id]||0)+1;
+        dot(p,3.2,Math.min(1,p.life/p.max+.2))}}
+    if(dirty||now-lastUI>500){updateUI(E,hits);lastUI=now;dirty=false}}
+  requestAnimationFrame(frame)}
+
+let mt;
+map.on('movestart',()=>{moving=true;scent=[]});
+map.on('moveend',()=>{moving=false;clearTimeout(mt);mt=setTimeout(()=>{buildElev();maybeWx()},250)});
+window.addEventListener('resize',()=>{resizeFx();buildElev()});
+map.on('locationfound',e=>{if(me)me.remove();me=L.circleMarker(e.latlng,{radius:7,color:'#fff',weight:2,fillColor:'#2f80ed',fillOpacity:1}).addTo(map)});
+map.on('locationerror',()=>{$('alert').textContent='Location unavailable. Pan to your property instead.'});
+
+$('time').oninput=e=>{minutes=+e.target.value;dirty=true;scent=[]};
+const dIn=$('date');dIn.value=`${selDate.getFullYear()}-${pad(selDate.getMonth()+1)}-${pad(selDate.getDate())}`;
+dIn.onchange=()=>{const[y,m,d]=dIn.value.split('-').map(Number);if(y){selDate=new Date(y,m-1,d);dirty=true;scent=[]}};
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'❚❚ Pause':'▶ Play'};
+$('now').onclick=()=>{const n=new Date();selDate=new Date(n);selDate.setHours(0,0,0,0);dIn.value=`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`;minutes=n.getHours()*60+n.getMinutes();dirty=true;scent=[]};
+$('loc').onclick=()=>map.locate({setView:true,maxZoom:16});
+document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b))});
+const setManual=()=>{manual={dir:+$('wd').value,spd:+$('ws').value};dirty=true};
+$('wd').oninput=setManual;$('ws').oninput=setManual;
+$('live').onclick=()=>{manual=null;dirty=true};
+$('grab').onclick=()=>{const s=$('sheet');s.classList.toggle('min');$('grab').textContent=s.classList.contains('min')?'More ▴':'Less ▾';dirty=true};
+
+resizeFx();drawMarkers();
+if(markers.length)map.fitBounds(L.latLngBounds(markers.map(m=>[m.lat,m.lng])).pad(0.6),{maxZoom:16});
+else map.locate({setView:true,maxZoom:15});
+buildElev();maybeWx();requestAnimationFrame(frame);
+</script>
+</body>
+</html>
