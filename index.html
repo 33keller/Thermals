@@ -573,5 +573,10 @@ if(markers.length)map.fitBounds(L.latLngBounds(markers.map(m=>[m.lat,m.lng])).pa
 else map.locate({setView:true,maxZoom:15});
 buildElev();maybeWx();loadLand();tick();requestAnimationFrame(frame);
 </script>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="model.js"></script>
+<script src="layers.js"></script>
+<script src="view3d.js"></script>
+<script src="ui.js"></script>
 </body>
 </html>
