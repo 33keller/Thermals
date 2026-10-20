@@ -14,19 +14,24 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#14171a;color:#e8e6e1;font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif;overflow:hidden}
 #map{position:absolute;inset:0}
+#tf{position:absolute;inset:0;pointer-events:none;z-index:440}
 #fx{position:absolute;inset:0;pointer-events:none;z-index:450}
+#night{position:absolute;inset:0;z-index:3000;pointer-events:none;display:none;background:#f00;mix-blend-mode:multiply}
+body.night #night{display:block}
+body.night #map{filter:brightness(.6)}
+.hide{display:none!important}
 .leaflet-top{top:env(safe-area-inset-top)}
-#top{position:absolute;top:calc(env(safe-area-inset-top) + 10px);left:10px;z-index:1000;display:flex;flex-direction:column;gap:6px}
+#top{position:absolute;top:calc(env(safe-area-inset-top) + 10px);left:10px;z-index:1000;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .pill{background:rgba(20,23,26,.88);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:6px 10px;font-size:14px}
 #badge.r{background:#8a2020}#badge.f{background:#164a80}#badge.n{background:#55554f}
-#sheet{position:absolute;left:0;right:0;bottom:0;z-index:1000;background:rgba(20,23,26,.95);border-top:1px solid rgba(255,255,255,.12);border-radius:14px 14px 0 0;padding:6px 12px calc(env(safe-area-inset-bottom) + 10px);max-height:65vh;overflow-y:auto}
+#sheet{position:absolute;left:0;right:0;bottom:0;z-index:1000;background:rgba(20,23,26,.95);border-top:1px solid rgba(255,255,255,.12);border-radius:14px 14px 0 0;padding:6px 12px calc(env(safe-area-inset-bottom) + 10px);max-height:68vh;overflow-y:auto}
 #grab{display:block;margin:0 auto 6px;padding:4px 14px;font-size:13px}
 #sheet.min .more{display:none}
 .row{display:flex;align-items:center;gap:8px;margin:6px 0}
 .row label{font-size:13px;color:#a9a7a0;min-width:74px}
 .row input[type=range]{flex:1}
 .v{font-size:13px;min-width:66px;text-align:right}
-button,.chip,input[type=date]{background:#23272b;color:#e8e6e1;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px 10px;font-size:14px}
+button,.chip,input[type=date],input[type=number],input[type=text],input[type=tel],input[type=time],select{background:#23272b;color:#e8e6e1;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px 10px;font-size:14px}
 .chip.on{background:#e8e6e1;color:#14171a}
 .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
@@ -36,6 +41,8 @@ button,.chip,input[type=date]{background:#23272b;color:#e8e6e1;border:1px solid 
 .cell b{font-weight:600;font-size:14px}
 #alert{font-size:13px;margin:6px 0;color:#a9a7a0}
 #alert.bad{color:#ff8a80}
+#warn{font-size:13px;color:#ffcf70;margin:4px 0}
+#warn:empty{display:none}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#a9a7a0;margin:2px 0}
 .d{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:1px solid #000}
 .sq{display:inline-block;width:10px;height:10px;margin-right:4px;vertical-align:-1px;border:1px solid #000}
@@ -43,84 +50,166 @@ button,.chip,input[type=date]{background:#23272b;color:#e8e6e1;border:1px solid 
 .leaflet-popup-content button{margin:4px 4px 0 0;padding:6px 8px;font-size:13px}
 .fine{font-size:11px;color:#77756f;line-height:1.4}
 .fine a{color:#9a988f}
+details{border-top:1px solid rgba(255,255,255,.1);padding:4px 0}
+summary{font-size:15px;font-weight:600;padding:8px 0;cursor:pointer}
+.sc{margin:8px 0}
+.scn{font-size:13px;margin-bottom:4px}
+.bar{display:grid;grid-template-columns:repeat(48,1fr);gap:1px;height:22px}
+.bar i{display:block;border-radius:2px}
+.hrs{display:flex;justify-content:space-between;font-size:10px;color:#77756f;margin-top:2px}
+.tog{display:flex;align-items:center;gap:8px;font-size:14px;margin:8px 0}
+.tog input{width:20px;height:20px}
+.lg{font-size:12px;color:#a9a7a0;border-bottom:1px solid rgba(255,255,255,.06);padding:4px 0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+#checkBanner{position:absolute;left:10px;right:10px;top:calc(env(safe-area-inset-top) + 160px);z-index:1002;background:#8a2020;border-radius:10px;padding:10px;font-size:14px}
 </style>
 </head>
 <body>
 <div id="map"></div>
+<canvas id="tf"></canvas>
 <canvas id="fx"></canvas>
-<div id="top"><div class="pill" id="badge">Loading terrain…</div><div class="pill" id="clock">--</div></div>
+<div id="night"></div>
+<div id="top">
+  <div class="pill" id="badge">Loading terrain…</div>
+  <div class="pill" id="clock">--</div>
+  <div class="pill" id="lightP">--</div>
+  <div class="pill hide" id="navP"></div>
+</div>
+<div id="checkBanner" class="hide">You're past your check-in time.<div class="chips" style="margin-top:8px"><button id="ciOk">I'm out safe</button><button id="ciHelp">Text my location</button></div></div>
 <div id="sheet" class="min">
   <button id="grab">More ▴</button>
+  <div id="routebar" class="chips hide" style="margin:0 0 6px"><span id="rCount" style="font-size:13px">Tap the map to draw your route</span><button id="rUndo">Undo</button><button id="rDone">Save route</button><button id="rCancel">Cancel</button></div>
   <div class="legend"><span><span class="d" style="background:#e24b4a"></span>Rising</span><span><span class="d" style="background:#378add"></span>Falling</span><span><span class="d" style="background:#fff"></span>Neutral</span><span>Big dots = your scent</span></div>
   <div id="alert">Tap the map to drop your stand.</div>
+  <div id="warn"></div>
   <div class="row"><label>Time</label><input id="time" type="range" min="0" max="1439" step="5"><span class="v" id="timeV"></span></div>
   <div class="chips"><button id="play">▶ Play</button><button id="now">Now</button><button id="loc">My location</button><input id="date" type="date"></div>
   <div class="more">
-    <div class="chips" style="margin-top:10px"><span style="font-size:13px;color:#a9a7a0">Tap adds:</span>
-      <button class="chip on" data-m="stand">Stand</button><button class="chip" data-m="bed">Bedding</button><button class="chip" data-m="food">Food</button><button class="chip" data-m="none">Land info</button></div>
-    <div class="legend" style="margin-top:8px"><span><span class="sq" style="background:#f2b134"></span>Federal</span><span><span class="sq" style="background:#8f6cf0"></span>State</span><span><span class="sq" style="background:#9acd32"></span>Local</span><span><span class="sq" style="background:#e68d45"></span>Private conservation</span><span>Unshaded = likely private</span></div>
-    <div class="grid" id="info"></div>
-    <div class="row"><label>Wind from</label><input id="wd" type="range" min="0" max="350" step="10"><span class="v" id="wdV"></span></div>
-    <div class="row"><label>Wind mph</label><input id="ws" type="range" min="0" max="25" step="1"><span class="v" id="wsV"></span></div>
-    <div class="chips"><button id="live">Use forecast wind</button></div>
-    <p class="fine">Thermals are modeled from sun angle on each slope, cloud cover, and wind. It's a planning tool, so confirm in the field with a puffer or milkweed. Public land data can lag reality and doesn't show every access rule; always check your state's regulations and posted boundaries. Shooting light shown is civil twilight; check your state's legal hours. Solunar times are folklore, not proven science.<br>Imagery: USGS, Esri. Elevation: <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a> (Mapzen). Public land: USGS PAD-US 4.1. Weather: <a href="https://open-meteo.com">Open-Meteo</a>. Sun/moon: SunCalc.</p>
+    <details open><summary>Tap the map to add</summary>
+      <div class="chips">
+        <button class="chip on" data-m="stand">Stand</button><button class="chip" data-m="bed">Bedding</button><button class="chip" data-m="food">Food</button>
+        <button class="chip" data-m="rub">Rub</button><button class="chip" data-m="scrape">Scrape</button><button class="chip" data-m="cam">Trail cam</button>
+        <button class="chip" data-m="note">Note</button><button class="chip" data-m="route">Route</button><button class="chip" data-m="none">Land info</button>
+      </div>
+      <p class="fine">Tap any pin to rename, add a note or photo, or delete it. Routes turn red where your scent would blow into bedding or food at the selected time.</p>
+    </details>
+    <details id="scoreBox" open><summary>Stand scorecard</summary>
+      <div id="score"></div>
+      <p class="fine">Green = scent clear of bedding and food. Yellow = swirling or close. Red = busted. Faded = outside shooting light. Tap a block to jump to that time. Keep your stands on screen so terrain counts.</p>
+    </details>
+    <details open><summary>Conditions</summary><div class="grid" id="info"></div></details>
+    <details><summary>Wind</summary>
+      <div class="row"><label>Wind from</label><input id="wd" type="range" min="0" max="350" step="10"><span class="v" id="wdV"></span></div>
+      <div class="row"><label>Wind mph</label><input id="ws" type="range" min="0" max="25" step="1"><span class="v" id="wsV"></span></div>
+      <div class="chips"><button id="live">Use forecast wind</button></div>
+    </details>
+    <details><summary>Map layers</summary>
+      <label class="tog"><input type="checkbox" id="tFeat">Terrain features (ridges, benches, saddles)</label>
+      <label class="tog"><input type="checkbox" id="tDrain">Drainages (cold air and scent sinks)</label>
+      <label class="tog"><input type="checkbox" id="tBed">Likely bedding (south slopes, upper ground)</label>
+      <div class="legend"><span><span class="sq" style="background:#ff9628"></span>Ridge</span><span><span class="sq" style="background:#46a0ff"></span>Drainage</span><span><span class="sq" style="background:#78e678"></span>Bench</span><span><span class="sq" style="background:#ffe146"></span>Bedding</span><span>◆ Saddle</span></div>
+      <div class="legend" style="margin-top:6px"><span><span class="sq" style="background:#f2b134"></span>Federal</span><span><span class="sq" style="background:#8f6cf0"></span>State</span><span><span class="sq" style="background:#9acd32"></span>Local</span><span><span class="sq" style="background:#e68d45"></span>Private conservation</span><span>Unshaded = likely private</span></div>
+      <p class="fine">Terrain layers show when zoomed in to about property level. Public land is toggled in the layers button at top right.</p>
+    </details>
+    <details><summary>Hunt log</summary>
+      <p class="fine">Logs a sit at your active stand for the time on the slider, with that hour's wind, thermals, temp, and moon.</p>
+      <div class="row"><label>Deer seen</label><input id="lgDeer" type="number" min="0" value="0" style="width:70px"><label style="min-width:auto">Bucks</label><input id="lgBucks" type="number" min="0" value="0" style="width:70px"></div>
+      <div class="row"><label>Notes</label><input id="lgNote" type="text" style="flex:1" placeholder="8pt cruising at 4:10"></div>
+      <div class="chips"><button id="lgSave">Log this sit</button><button id="lgExport">Export CSV</button></div>
+      <div id="lgSum"></div>
+    </details>
+    <details><summary>Walk-in and safety</summary>
+      <div class="chips"><button id="navBtn">Navigate to stand</button></div>
+      <label class="tog"><input type="checkbox" id="tCrumb">Track my path while navigating</label>
+      <div class="row"><label>Contact #</label><input id="phone" type="tel" placeholder="555-555-5555" style="flex:1"></div>
+      <div class="row"><label>Back by</label><input id="backBy" type="time"><button id="ciStart">Start check-in</button></div>
+      <div class="chips"><button id="txtPlan">Text my plan</button><button id="share">Share plan with party</button></div>
+      <p class="fine">Check-in reminders only work while the app is open. Texting your plan before you head out is the real safety net.</p>
+    </details>
+    <details><summary>Offline</summary>
+      <div class="chips"><button id="offSave">Save this area offline</button><button id="offClear">Clear offline data</button></div>
+      <div id="offMsg" class="fine" style="margin-top:6px">Zoom to your property, then save. Maps, terrain, public land, and the last forecast will work with no signal.</div>
+    </details>
+    <details><summary>Settings</summary>
+      <div class="row"><label>Your name</label><input id="uname" type="text" style="flex:1"></div>
+      <div class="row"><label>Legal light</label><select id="lightRule" style="flex:1"><option value="30">30 min before sunrise to 30 min after sunset</option><option value="civil">Civil twilight</option></select></div>
+      <label class="tog"><input type="checkbox" id="tNight">Red night mode</label>
+      <label class="tog"><input type="checkbox" id="tAlerts">Shooting light alerts (vibrate and beep)</label>
+    </details>
+    <p class="fine">Thermals are modeled from sun angle on each slope, cloud cover, and wind. Terrain features, bedding, and movement scores are educated guesses from elevation and weather data, not guarantees. Public land data can lag reality; always check regulations and posted boundaries. Rut dates are rough regional averages. Solunar times are folklore.<br>Imagery: USGS, Esri. Elevation: <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a> (Mapzen). Public land: USGS PAD-US 4.1. Weather: <a href="https://open-meteo.com">Open-Meteo</a>. Sun/moon: SunCalc.</p>
   </div>
 </div>
+<input type="file" id="photoIn" accept="image/*" capture="environment" class="hide">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const DIRS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const DIR8=['N','NE','E','SE','S','SW','W','NW'];
 const compass=d=>DIRS[Math.round((((d%360)+360)%360)/22.5)%16];
+const c8=d=>DIR8[Math.round((((d%360)+360)%360)/45)%8];
 const fmtT=d=>d&&!isNaN(d)?d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'—';
 const pad=n=>String(n).padStart(2,'0');
+const add=(d,min)=>d&&!isNaN(d)?new Date(d.getTime()+min*6e4):null;
+const angDiff=(a,b)=>{const d=Math.abs(a-b)%360;return d>180?360-d:d};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hm=ms=>{const m=Math.max(0,Math.round(ms/6e4));return m>=60?Math.floor(m/60)+'h '+(m%60)+'m':m+'m'};
+const LS=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}};
+const SV=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){alert('Phone storage for this app is full. Delete some photos or log entries.');return false}};
 const T=0.2;
+
+let S=Object.assign({lightRule:'30',night:false,alerts:true,phone:'',name:'',feat:false,bed:false,drain:false,crumbs:true,land:localStorage.getItem('ts_land')!=='0',backBy:null,checkedIn:true},LS('ts_set',{}));
+const saveS=()=>SV('ts_set',S);
+let markers=LS('ts_markers',[]),routes=LS('ts_routes',[]),log=LS('ts_log',[]);
+let activeId=localStorage.getItem('ts_active')||null;
+{let n=0;markers.forEach(m=>{if(m.type==='stand'&&!m.name)m.name='Stand '+(++n)})}
+function saveM(){SV('ts_markers',markers);localStorage.setItem('ts_active',activeId||'')}
 
 const map=L.map('map',{zoomControl:false}).setView([38.5,-92.5],6);
 const hyb=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:16,attribution:'USGS'});
 const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Esri, Maxar, Earthstar Geographics'});
 const topo=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:16,attribution:'USGS'});
-hyb.addTo(map);
+let base=hyb;hyb.addTo(map);
+map.on('baselayerchange',e=>{base=e.layer});
 
 function landColor(p){switch(p.Mang_Type){case'FED':return'#f2b134';case'STAT':return'#8f6cf0';case'LOC':case'DIST':return'#9acd32';case'TRIB':return'#c9b89a';case'NGO':case'PVT':return'#e68d45';default:return'#d9a5a4'}}
 const landLayer=L.geoJSON(null,{interactive:false,style:f=>{const c=landColor(f.properties||{});return{color:c,weight:2,fillColor:c,fillOpacity:.22}}});
-let landOn=localStorage.getItem('ts_land')!=='0',landFeats=[],landTok=0;
-if(landOn)landLayer.addTo(map);
+let landFeats=[],landTok=0;
+if(S.land)landLayer.addTo(map);
 L.control.layers({'Satellite + topo':hyb,'Satellite':sat,'Topo':topo},{'Public land':landLayer},{position:'topright'}).addTo(map);
-map.on('overlayadd',e=>{if(e.layer===landLayer){landOn=true;localStorage.setItem('ts_land','1');loadLand();dirty=true}});
-map.on('overlayremove',e=>{if(e.layer===landLayer){landOn=false;localStorage.setItem('ts_land','0');landFeats=[];dirty=true}});
+map.on('overlayadd',e=>{if(e.layer===landLayer){S.land=true;saveS();loadLand();dirty=true}});
+map.on('overlayremove',e=>{if(e.layer===landLayer){S.land=false;saveS();landFeats=[];dirty=true}});
+function landURL(b,z){const tol=(360/(256*2**z)).toFixed(7);
+  return 'https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/Fee_Managers_PADUS/FeatureServer/0/query?where=1%3D1'+
+  `&geometry=${b.getWest().toFixed(5)},${b.getSouth().toFixed(5)},${b.getEast().toFixed(5)},${b.getNorth().toFixed(5)}`+
+  '&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Unit_Nm,Loc_Nm,Mang_Name,Loc_Mang,Mang_Type,Pub_Access,GIS_Acres'+
+  `&outSR=4326&geometryPrecision=6&maxAllowableOffset=${tol}&f=geojson`}
 async function loadLand(){
-  if(!landOn||map.getZoom()<11){landLayer.clearLayers();landFeats=[];return}
-  const tok=++landTok,b=map.getBounds().pad(0.2),tol=(360/(256*2**map.getZoom())).toFixed(7);
-  const url='https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/Fee_Managers_PADUS/FeatureServer/0/query?where=1%3D1'+
-    `&geometry=${b.getWest().toFixed(5)},${b.getSouth().toFixed(5)},${b.getEast().toFixed(5)},${b.getNorth().toFixed(5)}`+
-    '&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Unit_Nm,Loc_Nm,Mang_Name,Loc_Mang,Mang_Type,Pub_Access,GIS_Acres'+
-    `&outSR=4326&geometryPrecision=6&maxAllowableOffset=${tol}&f=geojson`;
-  try{const r=await fetch(url),j=await r.json();if(tok!==landTok)return;landLayer.clearLayers();if(j.features){landLayer.addData(j);landFeats=j.features}else landFeats=[];dirty=true}catch(e){}}
+  if(!S.land||map.getZoom()<11){landLayer.clearLayers();landFeats=[];return}
+  const tok=++landTok;
+  try{const r=await fetch(landURL(map.getBounds().pad(0.2),map.getZoom())),j=await r.json();if(tok!==landTok)return;landLayer.clearLayers();if(j.features){landLayer.addData(j);landFeats=j.features}else landFeats=[]}
+  catch(e){const off=LS('ts_land_off',null);if(off&&tok===landTok){landLayer.clearLayers();landLayer.addData(off);landFeats=off.features||[]}}
+  dirty=true}
 function inRing(x,y,r){let ins=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins}return ins}
 function inPoly(x,y,rings){if(!inRing(x,y,rings[0]))return false;for(let k=1;k<rings.length;k++)if(inRing(x,y,rings[k]))return false;return true}
 function landAt(lat,lng){for(const f of landFeats){const g=f.geometry;if(!g)continue;const ps=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];for(const p of ps)if(inPoly(lng,lat,p))return f.properties}return null}
 const ACC={OA:'Open access',RA:'Restricted access',XA:'Closed',UK:'Access unknown'};
-function landText(lat,lng){if(!landOn)return'Layer off';if(map.getZoom()<11)return'Zoom in to check';const p=landAt(lat,lng);
+function landText(lat,lng){if(!S.land)return'Public land layer off';if(map.getZoom()<11)return'Zoom in to check land';const p=landAt(lat,lng);
   if(!p)return'Not in public database (likely private)';const nm=p.Unit_Nm||p.Loc_Nm||'Public land',ac=ACC[p.Pub_Access]||'Access unknown';
-  if(p.Mang_Type==='PVT'||p.Mang_Type==='NGO')return`${nm} · private conservation · ${ac}`;
-  return`${nm} · ${ac}${p.GIS_Acres?' · '+Number(p.GIS_Acres).toLocaleString()+' ac':''}`}
+  if(p.Mang_Type==='PVT'||p.Mang_Type==='NGO')return`${esc(nm)} · private conservation · ${ac}`;
+  return`${esc(nm)} · ${ac}${p.GIS_Acres?' · '+Number(p.GIS_Acres).toLocaleString()+' ac':''}`}
 
 let selDate=new Date();selDate.setHours(0,0,0,0);
 let minutes=new Date().getHours()*60+new Date().getMinutes();
-let playing=false,mode='stand',moving=false,manual=null,wx=null,wxKey='',elev=null,elevTok=0,dirty=true;
-let markers=JSON.parse(localStorage.getItem('ts_markers')||'[]');
-let activeId=localStorage.getItem('ts_active');
-let me=null;
-
-function save(){localStorage.setItem('ts_markers',JSON.stringify(markers));localStorage.setItem('ts_active',activeId||'')}
+let playing=false,mode='stand',moving=false,manual=null,wx=null,wxKey='',elev=null,elevTok=0,elevBuilt=0,dirty=true;
+let me=null,meLL=null;
 function curTime(){return new Date(selDate.getTime()+minutes*6e4)}
 function activeStand(){return markers.find(m=>m.id===activeId&&m.type==='stand')||markers.find(m=>m.type==='stand')}
 function refPt(){const s=activeStand();return s?{lat:s.lat,lng:s.lng}:map.getCenter()}
+function screenMpp(){return 156543.034*Math.cos(map.getCenter().lat*Math.PI/180)/2**map.getZoom()}
 
-const fx=$('fx'),ctx=fx.getContext('2d');let W=0,H=0;
-function resizeFx(){const dpr=window.devicePixelRatio||1;W=fx.clientWidth;H=fx.clientHeight;fx.width=W*dpr;fx.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+const fx=$('fx'),ctx=fx.getContext('2d'),tf=$('tf'),tctx=tf.getContext('2d');let W=0,H=0;
+function resizeFx(){const dpr=window.devicePixelRatio||1;W=fx.clientWidth;H=fx.clientHeight;for(const c of[fx,tf]){c.width=W*dpr;c.height=H*dpr}ctx.setTransform(dpr,0,0,dpr,0,0);tctx.setTransform(dpr,0,0,dpr,0,0)}
 
 function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=src})}
 async function buildElev(){
@@ -135,12 +224,10 @@ async function buildElev(){
   let px;try{px=g.getImageData(0,0,c.width,c.height).data}catch(e){$('badge').textContent='Elevation blocked';return}
   const e=new Float32Array(c.width*c.height);
   for(let i=0;i<e.length;i++){const k=i*4;e[i]=px[k]*256+px[k+1]+px[k+2]/256-32768}
-  const lat=map.getCenter().lat;
-  elev={sc,ox:x0*256,oy:y0*256,w:c.width,h:c.height,e,mpp:156543.034*Math.cos(lat*Math.PI/180)/n,pbx:pb.min.x,pby:pb.min.y};
-  resetParticles();
-}
+  elev={sc,ox:x0*256,oy:y0*256,w:c.width,h:c.height,e,mpp:156543.034*Math.cos(map.getCenter().lat*Math.PI/180)/n,pbx:pb.min.x,pby:pb.min.y};
+  elevBuilt++;resetParticles();buildFeatures();dirty=true}
 function gridXY(cx,cy){return[Math.round((elev.pbx+cx)*elev.sc-elev.ox),Math.round((elev.pby+cy)*elev.sc-elev.oy)]}
-function elevAt(cx,cy){if(!elev)return null;let[x,y]=gridXY(cx,cy);if(x<0||y<0||x>=elev.w||y>=elev.h)return null;return elev.e[y*elev.w+x]}
+function elevAt(cx,cy){if(!elev)return null;const[x,y]=gridXY(cx,cy);if(x<0||y<0||x>=elev.w||y>=elev.h)return null;return elev.e[y*elev.w+x]}
 function slope(cx,cy){if(!elev)return null;const[x,y]=gridXY(cx,cy),s=2,w=elev.w,E=elev.e;
   if(x<s||y<s||x>=w-s||y>=elev.h-s)return null;
   return{e:(E[y*w+x+s]-E[y*w+x-s])/(2*s*elev.mpp),n:-(E[(y+s)*w+x]-E[(y-s)*w+x])/(2*s*elev.mpp)}}
@@ -148,30 +235,45 @@ function slope(cx,cy){if(!elev)return null;const[x,y]=gridXY(cx,cy),s=2,w=elev.w
 function sAt(ge,gn,E){const sun=E.sun;if(sun.alt<=0)return -1;
   const ca=Math.cos(sun.alt),sx=-Math.sin(sun.az)*ca,sy=-Math.cos(sun.az)*ca,sz=Math.sin(sun.alt);
   const nz=1/Math.sqrt(ge*ge+gn*gn+1),il=Math.max(0,(-ge*sx-gn*sy+sz)*nz);
-  const sl=clamp((il*E.cf-T)/T,-1,1),fl=clamp((sz*E.cf-T)/T,-1,1);return .6*sl+.4*fl}
+  return .6*clamp((il*E.cf-T)/T,-1,1)+.4*clamp((sz*E.cf-T)/T,-1,1)}
 
 function hourData(d){if(!wx)return null;const k=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
   const i=wx.time.indexOf(k);if(i<0)return null;
   return{dir:wx.wind_direction_10m[i],spd:wx.wind_speed_10m[i],gust:wx.wind_gusts_10m[i],temp:wx.temperature_2m[i],cloud:wx.cloud_cover[i],rain:wx.precipitation_probability[i]}}
 function windNow(d){const h=hourData(d);if(manual)return{...(h||{}),dir:manual.dir,spd:manual.spd,manual:true};return h||{dir:0,spd:0,cloud:0,none:true}}
 async function maybeWx(){const p=refPt(),k=p.lat.toFixed(1)+','+p.lng.toFixed(1);if(k===wxKey)return;wxKey=k;
-  try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat.toFixed(3)}&longitude=${p.lng.toFixed(3)}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation_probability&wind_speed_unit=mph&temperature_unit=fahrenheit&timezone=auto&past_days=1&forecast_days=16`);
-    wx=(await r.json()).hourly;dirty=true}catch(e){wx=null;wxKey=''}}
+  try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat.toFixed(3)}&longitude=${p.lng.toFixed(3)}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation_probability,pressure_msl&wind_speed_unit=mph&temperature_unit=fahrenheit&timezone=auto&past_days=1&forecast_days=16`);
+    const j=await r.json();if(!j.hourly)throw 0;wx=j.hourly;SV('ts_wx',{k,h:wx})}
+  catch(e){const c=LS('ts_wx',null);if(c)wx=c.h;else{wx=null;wxKey=''}}
+  dirty=true}
 
-function env(){const d=curTime(),p=refPt(),noon=new Date(selDate.getTime()+12*36e5);
+function env(d,p){d=d||curTime();p=p||refPt();const noon=new Date(d);noon.setHours(12,0,0,0);
   const st=SunCalc.getTimes(noon,p.lat,p.lng),sp=SunCalc.getPosition(d,p.lat,p.lng),w=windNow(d);
   const cf=1-.7*(w.cloud||0)/100,rad=w.dir*Math.PI/180,v=w.spd*.35*.25;
   const E={d,p,st,w,cf,sun:{alt:sp.altitude,az:sp.azimuth},wv:{x:-Math.sin(rad)*v,y:Math.cos(rad)*v}};E.s0=sAt(0,0,E);return E}
 function flow(x,y,E){const g=slope(x,y);if(!g)return{vx:E.wv.x,vy:E.wv.y,s:E.s0,g:null};
   const gm=Math.hypot(g.e,g.n),s=sAt(g.e,g.n,E),sf=Math.min(1,gm/.15)*.8+.2,damp=1-Math.min(E.w.spd/14,.75),th=s*1.3*sf*damp;
   const ux=gm>1e-4?g.e/gm:0,uy=gm>1e-4?-g.n/gm:0;return{vx:th*ux+E.wv.x,vy:th*uy+E.wv.y,s,g}}
+function targets(){return markers.filter(m=>m.type==='bed'||m.type==='food').map(m=>{const p=map.latLngToContainerPoint([m.lat,m.lng]);return{x:p.x,y:p.y,type:m.type}})}
+function hitR(){return clamp(75/screenMpp(),14,90)}
+function trace(sx,sy,E,spread){const pts=[];let x=sx,y=sy;const maxPx=clamp(400/screenMpp(),40,600),off=spread*Math.PI/180;
+  for(let d=0;d<maxPx;d+=4){const f=flow(x,y,E),m=Math.hypot(f.vx,f.vy);if(m<.04)break;const a=Math.atan2(f.vy,f.vx)+off;x+=Math.cos(a)*4;y+=Math.sin(a)*4;pts.push(x,y)}
+  return pts}
+function riskAt(px,py,E,tg,r){const f=flow(px,py,E),m=Math.hypot(f.vx,f.vy),swirl=(Math.abs(f.s)<.2&&E.w.spd<4)||m<.04;
+  if(!tg.length)return swirl?1:0;
+  for(const t of tg)if(Math.hypot(px-t.x,py-t.y)<r)return 2;
+  const sp=swirl?40:15;let near=false;
+  for(const o of[-sp,0,sp]){const p=trace(px,py,E,o);for(let i=0;i<p.length;i+=2)for(const t of tg){const d=Math.hypot(p[i]-t.x,p[i+1]-t.y);if(d<r)return 2;if(d<r*1.8)near=true}}
+  return swirl||near?1:0}
 
 let swCache={k:'',v:null};
-function switchTimes(p){const k=selDate.toDateString()+p.lat.toFixed(2)+p.lng.toFixed(2)+(wx?'w':'')+(manual?'m':'');if(swCache.k===k)return swCache.v;
+function switchTimes(p){const k=selDate.toDateString()+p.lat.toFixed(2)+p.lng.toFixed(2)+(wx?'w':'');if(swCache.k===k)return swCache.v;
   let am=null,pm=null,prev=null;
   for(let m=0;m<1440;m+=5){const d=new Date(selDate.getTime()+m*6e4),sp=SunCalc.getPosition(d,p.lat,p.lng),h=hourData(d),cf=1-.7*((h&&h.cloud)||0)/100;
     const v=sp.altitude>0?Math.sin(sp.altitude)*cf-T:-1;if(prev!==null){if(prev<0&&v>=0&&!am)am=d;if(prev>=0&&v<0)pm=d}prev=v}
   swCache={k,v:{am,pm}};return swCache.v}
+function lightTimes(p,day){const n=new Date(day);n.setHours(12,0,0,0);const st=SunCalc.getTimes(n,p.lat,p.lng);
+  return S.lightRule==='civil'?{start:st.dawn,end:st.dusk}:{start:add(st.sunrise,-30),end:add(st.sunset,30)}}
 
 let amb=[],scent=[];
 function rp(){return{x:Math.random()*W,y:Math.random()*H,vx:0,vy:0,life:80+Math.random()*180,s:0}}
@@ -180,62 +282,168 @@ function move(p,E){const f=flow(p.x,p.y,E),j=Math.abs(f.s)<.2?.7:.25;
   p.vx=p.vx*.85+f.vx*.15+(Math.random()-.5)*j;p.vy=p.vy*.85+f.vy*.15+(Math.random()-.5)*j;p.x+=p.vx;p.y+=p.vy;p.life--;p.s=f.s}
 function dot(p,r,a){const c=p.s>.2?'226,75,74':p.s<-.2?'55,138,221':'255,255,255';
   ctx.fillStyle=`rgba(${c},${a})`;ctx.beginPath();ctx.arc(p.x,p.y,r,0,6.283);ctx.fill();ctx.strokeStyle=`rgba(0,0,0,${a*.6})`;ctx.lineWidth=.7;ctx.stroke()}
-function hitR(){const m=156543.034*Math.cos(map.getCenter().lat*Math.PI/180)/2**map.getZoom();return clamp(75/m,14,90)}
 
-const COL={stand:'#e07a1f',bed:'#8b5a2b',food:'#3b8f3b'},LET={stand:'S',bed:'B',food:'F'},NAME={stand:'Stand',bed:'Bedding',food:'Food'};
+const MT={stand:['#e07a1f','S','Stand'],bed:['#8b5a2b','B','Bedding'],food:['#3b8f3b','F','Food'],rub:['#b03a2e','R','Rub'],scrape:['#7d3c98','X','Scrape'],cam:['#2471a3','C','Trail cam'],note:['#566573','N','Note'],party:['#888888','P','Party stand']};
+const mt=m=>MT[m.type]||MT.note;
+const mName=m=>m.name||mt(m)[2];
 const mLayer=L.layerGroup().addTo(map);
 function drawMarkers(){mLayer.clearLayers();const a=activeStand();
-  markers.forEach(m=>{const on=a&&a.id===m.id;
-    const ic=L.divIcon({className:'',html:`<div class="mk" style="background:${COL[m.type]};${on?'box-shadow:0 0 0 3px #ffd54a':''}">${LET[m.type]}</div>`,iconSize:[24,24],iconAnchor:[12,12]});
-    const mk=L.marker([m.lat,m.lng],{icon:ic}).addTo(mLayer);
-    mk.bindPopup(()=>`<b>${NAME[m.type]}</b><br><small>${landText(m.lat,m.lng)}</small><br>${m.type==='stand'?`<button data-act="use" data-id="${m.id}">Use this stand</button>`:''}<button data-act="del" data-id="${m.id}">Delete</button>`)})}
-document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id;
-  if(b.dataset.act==='del'){markers=markers.filter(m=>m.id!==id);if(activeId===id)activeId=null}
-  if(b.dataset.act==='use')activeId=id;
-  save();map.closePopup();drawMarkers();scent=[];maybeWx()});
-map.on('click',e=>{
-  if(mode==='none'){L.popup().setLatLng(e.latlng).setContent(`<b>Land here</b><br>${landText(e.latlng.lat,e.latlng.lng)}`).openOn(map);return}
-  const m={id:Date.now().toString(36),type:mode,lat:e.latlng.lat,lng:e.latlng.lng};markers.push(m);
-  if(mode==='stand'){activeId=m.id;scent=[]}save();drawMarkers();maybeWx()});
+  markers.forEach(m=>{const on=a&&a.id===m.id,t=mt(m);
+    const ic=L.divIcon({className:'',html:`<div class="mk" style="background:${t[0]};${on?'box-shadow:0 0 0 3px #ffd54a':''}">${t[1]}</div>`,iconSize:[24,24],iconAnchor:[12,12]});
+    L.marker([m.lat,m.lng],{icon:ic}).addTo(mLayer).bindPopup(()=>{let h=`<b>${esc(mName(m))}</b>`;if(m.date)h+=`<br><small>Added ${new Date(m.date).toLocaleDateString()}</small>`;
+      if(m.note)h+=`<br>${esc(m.note)}`;if(m.photo)h+=`<br><img src="${m.photo}" style="max-width:200px;border-radius:6px;margin-top:4px">`;
+      h+=`<br><small>${landText(m.lat,m.lng)}</small><br>`;
+      if(m.type==='stand')h+=`<button data-act="use" data-id="${m.id}">Use</button><button data-act="ren" data-id="${m.id}">Rename</button>`;
+      return h+`<button data-act="note" data-id="${m.id}">Note</button><button data-act="photo" data-id="${m.id}">Photo</button><button data-act="del" data-id="${m.id}">Delete</button>`})})}
+let photoTarget=null;
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id,a=b.dataset.act,m=markers.find(x=>x.id===id);
+  if(a==='photo'){photoTarget=id;$('photoIn').click();return}
+  if(a==='del'&&confirm('Delete this pin?')){markers=markers.filter(x=>x.id!==id);if(activeId===id)activeId=null}
+  if(a==='use')activeId=id;
+  if(a==='ren'&&m){const n=prompt('Stand name',mName(m));if(n)m.name=n}
+  if(a==='note'&&m){const n=prompt('Note',m.note||'');if(n!==null)m.note=n}
+  if(a==='rdel'&&confirm('Delete this route?')){routes=routes.filter(r=>r.id!==id);SV('ts_routes',routes)}
+  if(a==='lgdel'&&confirm('Delete this log entry?')){log=log.filter(x=>x.id!==id);SV('ts_log',log);renderLog()}
+  saveM();map.closePopup();drawMarkers();scent=[];routeKey='';dirty=true;maybeWx()});
+$('photoIn').onchange=e=>{const f=e.target.files[0];if(!f||!photoTarget)return;const img=new Image();
+  img.onload=()=>{const s=Math.min(1,400/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);const m=markers.find(x=>x.id===photoTarget);if(m){m.photo=c.toDataURL('image/jpeg',.6);saveM();drawMarkers()}
+    URL.revokeObjectURL(img.src);e.target.value=''};img.src=URL.createObjectURL(f)};
 
-let moonCache={k:'',v:null};
-function moonDay(p){const k=selDate.toDateString()+p.lat.toFixed(2)+p.lng.toFixed(2);if(moonCache.k===k)return moonCache.v;
-  let hi=-9,lo=9,th=null,tl=null;for(let m=0;m<1440;m+=10){const d=new Date(selDate.getTime()+m*6e4),a=SunCalc.getMoonPosition(d,p.lat,p.lng).altitude;if(a>hi){hi=a;th=d}if(a<lo){lo=a;tl=d}}
-  const mt=SunCalc.getMoonTimes(selDate,p.lat,p.lng),il=SunCalc.getMoonIllumination(new Date(selDate.getTime()+12*36e5));
-  moonCache={k,v:{over:th,under:tl,rise:mt.rise,set:mt.set,il}};return moonCache.v}
-function phaseName(f){if(f<.03||f>.97)return'New';if(f<.22)return'Waxing crescent';if(f<.28)return'First quarter';if(f<.47)return'Waxing gibbous';if(f<.53)return'Full';if(f<.72)return'Waning gibbous';if(f<.78)return'Last quarter';return'Waning crescent'}
+let draft=null,draftLine=null;
+function setMode(md){mode=md;document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x.dataset.m===md));
+  if(md==='route'){draft=[];if(!draftLine)draftLine=L.polyline([],{color:'#fff',dashArray:'6 6',weight:3,interactive:false}).addTo(map);draftLine.setLatLngs([]);
+    $('rCount').textContent='Tap the map to draw your route';$('routebar').classList.remove('hide');$('sheet').classList.add('min');$('grab').textContent='More ▴'}
+  else{if(draftLine){draftLine.remove();draftLine=null}draft=null;$('routebar').classList.add('hide')}}
+$('rUndo').onclick=()=>{if(draft&&draft.length){draft.pop();draftLine.setLatLngs(draft);$('rCount').textContent=draft.length+' points'}};
+$('rDone').onclick=()=>{if(draft&&draft.length>=2){routes.push({id:Date.now().toString(36),pts:draft.slice()});SV('ts_routes',routes);routeKey=''}setMode('stand')};
+$('rCancel').onclick=()=>setMode('stand');
+map.on('click',e=>{const ll=e.latlng;
+  if(mode==='none'){L.popup().setLatLng(ll).setContent(`<b>Land here</b><br>${landText(ll.lat,ll.lng)}`).openOn(map);return}
+  if(mode==='route'){draft.push([ll.lat,ll.lng]);draftLine.setLatLngs(draft);$('rCount').textContent=draft.length+' points';return}
+  const m={id:Date.now().toString(36),type:mode,lat:ll.lat,lng:ll.lng,date:new Date().toISOString()};
+  if(mode==='stand')m.name='Stand '+(markers.filter(x=>x.type==='stand').length+1);
+  if(mode==='note'){const n=prompt('Note');if(n===null)return;m.note=n}
+  markers.push(m);if(mode==='stand'){activeId=m.id;scent=[]}saveM();drawMarkers();routeKey='';maybeWx()});
+
+const rLayer=L.layerGroup().addTo(map);let routeKey='',routeBad=0;
+function drawRoutes(E){if(moving)return;const k=[Math.floor(minutes/5),selDate.getTime(),routes.map(r=>r.id).join(),markers.map(m=>m.id).join(),wx?1:0,manual?manual.dir+'/'+manual.spd:'',elevBuilt].join('|');
+  if(k===routeKey)return;routeKey=k;rLayer.clearLayers();routeBad=0;const tg=targets(),r=hitR(),cols=['#2e9e5b','#d4a72c','#d64545'];
+  for(const rt of routes){const P=rt.pts.map(p=>map.latLngToContainerPoint(p));
+    for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1],n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/40));
+      for(let q=0;q<n;q++){const t0=q/n,t1=(q+1)/n,tm=(t0+t1)/2,lv=riskAt(a.x+(b.x-a.x)*tm,a.y+(b.y-a.y)*tm,E,tg,r);if(lv===2)routeBad++;
+        L.polyline([map.containerPointToLatLng([a.x+(b.x-a.x)*t0,a.y+(b.y-a.y)*t0]),map.containerPointToLatLng([a.x+(b.x-a.x)*t1,a.y+(b.y-a.y)*t1])],{color:cols[lv],weight:5,opacity:.9,interactive:false}).addTo(rLayer)}}
+    L.polyline(rt.pts,{weight:18,opacity:0,bubblingMouseEvents:false}).bindPopup(`<b>Route</b><br><button data-act="rdel" data-id="${rt.id}">Delete route</button>`).addTo(rLayer)}}
+
+let scoreKey='';
+function renderScores(){if(!$('scoreBox').open||$('sheet').classList.contains('min')||moving)return;
+  const k=[selDate.getTime(),markers.map(m=>m.id+m.lat).join(),wx?1:0,manual?manual.dir+'/'+manual.spd:'',elevBuilt,map.getZoom(),S.lightRule].join('|');
+  if(k===scoreKey){markNow();return}scoreKey=k;
+  const stands=markers.filter(m=>m.type==='stand'),tg=targets(),r=hitR(),box=$('score');
+  if(!stands.length){box.innerHTML='<p class="fine">Drop a stand to see its scorecard.</p>';return}
+  const lt=lightTimes(refPt(),selDate),tAt=i=>new Date(selDate.getTime()+(i*30+15)*6e4);let h='';
+  if(!tg.length)h+='<p class="fine">Add bedding and food pins so the scorecard knows what to protect.</p>';
+  for(const st of stands){const sp=map.latLngToContainerPoint([st.lat,st.lng]),cells=[];
+    for(let i=0;i<48;i++)cells.push(riskAt(sp.x,sp.y,env(tAt(i),st),tg,r));
+    let best=null,run=null,safe=0;
+    for(let i=0;i<48;i++){const d=tAt(i),inL=d>=lt.start&&d<=lt.end;if(inL&&cells[i]===0){safe++;run=run?{a:run.a,b:i}:{a:i,b:i};if(!best||run.b-run.a>best.b-best.a)best=run}else run=null}
+    const bt=best?`best ${fmtT(new Date(selDate.getTime()+best.a*30*6e4))}–${fmtT(new Date(selDate.getTime()+(best.b+1)*30*6e4))}`:'no safe window in shooting light';
+    h+=`<div class="sc"><div class="scn"><b>${esc(mName(st))}</b> · ${safe/2} safe hrs · ${bt}</div><div class="bar">`+
+      cells.map((c,i)=>{const d=tAt(i),inL=d>=lt.start&&d<=lt.end;return`<i data-ci="${i}" style="background:${['#2e9e5b','#d4a72c','#d64545'][c]};opacity:${inL?1:.3}"></i>`}).join('')+
+      '</div><div class="hrs"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div></div>'}
+  box.innerHTML=h;markNow()}
+function markNow(){const ci=Math.floor(minutes/30);document.querySelectorAll('.bar i').forEach(el=>{el.style.outline=+el.dataset.ci===ci?'2px solid #fff':''})}
+$('score').addEventListener('click',e=>{const c=e.target.dataset.ci;if(c!==undefined){minutes=+c*30+15;dirty=true;scent=[]}});
+
+let feat=null;
+function buildFeatures(){feat=null;
+  if(elev&&map.getZoom()>=13&&(S.feat||S.drain||S.bed)){
+    const g=6,cols=Math.ceil(W/g),rows=Math.ceil(H/g),N=cols*rows,z0=new Float32Array(N),ok=new Uint8Array(N);
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const v=elevAt(c*g+3,r*g+3),i=r*cols+c;if(v!=null&&v>-500){z0[i]=v;ok[i]=1}}
+    const z=new Float32Array(N);
+    for(let r=1;r<rows-1;r++)for(let c=1;c<cols-1;c++){let s=0,n=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const j=(r+dr)*cols+c+dc;if(ok[j]){s+=z0[j];n++}}z[r*cols+c]=n?s/n:0}
+    const d=g*screenMpp(),sl=new Float32Array(N),lap=new Float32Array(N),det=new Float32Array(N),asp=new Float32Array(N),valid=new Uint8Array(N);
+    let ls=0,ln=0;const zs=[];
+    for(let r=2;r<rows-2;r++)for(let c=2;c<cols-2;c++){const i=r*cols+c;if(!ok[i])continue;
+      const zx=(z[i+1]-z[i-1])/(2*d),zy=(z[i-cols]-z[i+cols])/(2*d),zxx=(z[i+1]-2*z[i]+z[i-1])/(d*d),zyy=(z[i-cols]-2*z[i]+z[i+cols])/(d*d),zxy=(z[i-cols+1]-z[i-cols-1]-z[i+cols+1]+z[i+cols-1])/(4*d*d);
+      sl[i]=Math.hypot(zx,zy);lap[i]=zxx+zyy;det[i]=zxx*zyy-zxy*zxy;asp[i]=(Math.atan2(-zx,-zy)*180/Math.PI+360)%360;valid[i]=1;ls+=lap[i]*lap[i];ln++;zs.push(z[i])}
+    if(ln>=50){
+      const sd=Math.sqrt(ls/ln);zs.sort((a,b)=>a-b);const zMed=zs[Math.floor(zs.length*.5)],z40=zs[Math.floor(zs.length*.4)];
+      const oc=document.createElement('canvas');oc.width=Math.max(1,Math.round(W));oc.height=Math.max(1,Math.round(H));const o=oc.getContext('2d');const sad=[];
+      for(let r=3;r<rows-3;r++)for(let c=3;c<cols-3;c++){const i=r*cols+c;if(!valid[i])continue;let col=null;
+        if(S.drain&&lap[i]>sd*1.1)col='rgba(70,160,255,.5)';
+        else if(S.feat&&lap[i]<-sd*1.1)col='rgba(255,150,40,.5)';
+        if(!col&&S.feat&&sl[i]<.06){let rs=0;for(const[dr,dc]of[[-3,0],[3,0],[0,-3],[0,3],[-2,-2],[2,2],[-2,2],[2,-2]])rs+=sl[i+dr*cols+dc];if(rs/8>.15)col='rgba(120,230,120,.45)'}
+        if(!col&&S.bed&&sl[i]>.08&&sl[i]<.45&&asp[i]>120&&asp[i]<240&&z[i]>zMed&&lap[i]<sd*.5)col='rgba(255,225,70,.35)';
+        if(col){o.fillStyle=col;o.fillRect(c*g,r*g,g,g)}
+        if(S.feat&&sl[i]<.1&&det[i]<-(sd*sd)*.5&&z[i]>z40)sad.push({x:c*g+3,y:r*g+3,v:-det[i]})}
+      sad.sort((a,b)=>b.v-a.v);const keep=[];for(const s of sad){if(keep.length>=6)break;if(keep.every(k=>Math.hypot(k.x-s.x,k.y-s.y)>70))keep.push(s)}
+      feat={c:oc,sad:keep}}}
+  drawTF()}
+function drawTF(){tctx.clearRect(0,0,W,H);if(!feat||moving)return;tctx.drawImage(feat.c,0,0,W,H);
+  for(const s of feat.sad){tctx.save();tctx.translate(s.x,s.y);tctx.rotate(Math.PI/4);tctx.fillStyle='#ffd54a';tctx.strokeStyle='#000';tctx.lineWidth=1.5;tctx.fillRect(-6,-6,12,12);tctx.strokeRect(-6,-6,12,12);tctx.restore();
+    tctx.font='600 12px sans-serif';tctx.lineWidth=3;tctx.strokeStyle='rgba(0,0,0,.7)';tctx.strokeText('Saddle',s.x+10,s.y+4);tctx.fillStyle='#fff';tctx.fillText('Saddle',s.x+10,s.y+4)}}
+
+function dayIdx(d0){if(!wx)return[];const k=`${d0.getFullYear()}-${pad(d0.getMonth()+1)}-${pad(d0.getDate())}T`,out=[];
+  wx.time.forEach((t,i)=>{if(t.startsWith(k)){const h=+t.slice(11,13);if(h>=6&&h<=19)out.push(i)}});return out}
+function moveScore(){const a=dayIdx(selDate),b=dayIdx(new Date(selDate.getTime()-864e5));if(!a.length)return null;
+  const avg=(ix,f)=>ix.reduce((s,i)=>s+(wx[f][i]||0),0)/ix.length;let sc=3;const why=[];
+  if(b.length){const dt=avg(a,'temperature_2m')-avg(b,'temperature_2m');if(dt<=-12){sc+=1.5;why.push(`${Math.round(-dt)}° colder than yesterday`)}else if(dt<=-6){sc+=1;why.push(`${Math.round(-dt)}° colder than yesterday`)}else if(dt>=10){sc-=1;why.push(`${Math.round(dt)}° warmer than yesterday`)}}
+  if(wx.pressure_msl){const p1=wx.pressure_msl[a[0]],p2=wx.pressure_msl[a[a.length-1]];if(p1!=null&&p2!=null){const dp=p2-p1;if(dp>=3){sc+=.5;why.push('pressure rising')}else if(dp<=-4){sc+=.5;why.push('front moving in')}}}
+  const mw=Math.max(...a.map(i=>wx.wind_speed_10m[i]||0));if(mw>=18){sc-=1;why.push('windy')}else if(mw<=10){sc+=.5;why.push('light wind')}
+  const mr=Math.max(...a.map(i=>wx.precipitation_probability[i]||0));if(mr>=70){sc-=.5;why.push('rain likely')}
+  if(avg(a,'temperature_2m')>=70){sc-=1;why.push('hot')}
+  return{sc:clamp(Math.round(sc),1,5),why}}
+function rutPhase(d,lat){if(lat<36)return'Southern rut dates vary widely by state; check your wildlife agency';const md=(d.getMonth()+1)*100+d.getDate();
+  if(md<300)return'Late season: food is king';if(md<1001)return'Off season / early season';if(md<1020)return'Early pre-rut: rubs showing up';if(md<1101)return'Pre-rut: scrapes heating up';
+  if(md<1108)return'Seeking: bucks cruising';if(md<1115)return'Chasing';if(md<1125)return'Peak breeding / lockdown';if(md<1205)return'Post-rut';if(md<1220)return'Second rut possible';return'Late season: food is king'}
+function windShift(d){if(!wx||manual)return'';const h0=hourData(d);if(!h0)return'';
+  for(let k=1;k<=6;k++){const t=new Date(d.getTime()+k*36e5),h=hourData(t);if(!h)break;if(h.spd>=3&&angDiff(h.dir,h0.dir)>=45){t.setMinutes(0);return`Wind shifts to ${compass(h.dir)} around ${fmtT(t)}. `}}return''}
+function eddy(st,E){if(!elev||E.w.spd<6)return'';const sp=map.latLngToContainerPoint([st.lat,st.lng]),z0=elevAt(sp.x,sp.y);if(z0==null)return'';
+  const rad=E.w.dir*Math.PI/180,ux=Math.sin(rad),uy=-Math.cos(rad),m=screenMpp();let mx=-1e9;
+  for(const dm of[80,160,240,320]){const z=elevAt(sp.x+ux*dm/m,sp.y+uy*dm/m);if(z!=null&&z>mx)mx=z}
+  return mx-z0>12?'Higher ground upwind: expect swirling wind at this stand. ':''}
+
 const cell=(l,v,w)=>`<div class="cell${w?' wide':''}"><small>${l}</small><b>${v}</b></div>`;
-const add=(d,min)=>d?new Date(d.getTime()+min*6e4):null;
-
 function updateUI(E,hits){const t=E.d;
   $('clock').textContent=t.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})+' · '+fmtT(t);
   $('timeV').textContent=fmtT(t);$('time').value=minutes;
-  const st=activeStand();let s=E.s0,alert='Tap the map to drop your stand.',bad=false,ft='—';
+  const st=activeStand();let s=E.s0,alert='Tap the map to drop your stand.',bad=false,ft='—',warn='';
   if(st){const sp=map.latLngToContainerPoint([st.lat,st.lng]),f=flow(sp.x,sp.y,E);s=f.s;
-    const hd=Math.atan2(f.vx,-f.vy)*180/Math.PI;
-    let dirTxt='';if(f.g){const up=f.vx*f.g.e+(-f.vy)*f.g.n;dirTxt=up>0.02?' (uphill)':up<-0.02?' (downhill)':''}
-    alert=`Scent drifting toward ${compass(hd)}${dirTxt}.`;
+    const hd=Math.atan2(f.vx,-f.vy)*180/Math.PI;let dirTxt='';if(f.g){const up=f.vx*f.g.e+(-f.vy)*f.g.n;dirTxt=up>0.02?' (uphill)':up<-0.02?' (downhill)':''}
+    alert=`${mName(st)}: scent drifting toward ${compass(hd)}${dirTxt}.`;
     const el=elevAt(sp.x,sp.y);if(el!=null)ft=Math.round(el*3.281)+' ft';
     const hit=markers.filter(m=>(hits[m.id]||0)>4);
-    if(hit.length){bad=true;alert+=' Reaching: '+[...new Set(hit.map(m=>NAME[m.type].toLowerCase()))].join(' and ')+'!'}}
+    if(hit.length){bad=true;alert+=' Reaching: '+[...new Set(hit.map(m=>mt(m)[2].toLowerCase()))].join(' and ')+'!'}
+    warn+=eddy(st,E)}
+  warn+=windShift(t);drawRoutes(E);if(routeBad>0)warn+='Your walk-in route blows scent into deer areas at this time. ';
   if(map.getZoom()<13)alert='Zoom in to your property for accurate terrain. '+alert;
+  if((S.feat||S.drain||S.bed)&&map.getZoom()<13)warn+='Zoom in to see terrain layers. ';
   if(E.w.none&&!wx)alert+=' (No forecast wind loaded.)';
-  $('alert').textContent=alert;$('alert').className=bad?'bad':'';
+  $('alert').textContent=alert;$('alert').className=bad?'bad':'';$('warn').textContent=warn;
   const b=$('badge');b.className=s>.2?'pill r':s<-.2?'pill f':'pill n';b.textContent=s>.2?'Thermals rising':s<-.2?'Thermals falling':'Thermals switching';
   if(!manual&&!E.w.none){$('wd').value=Math.round(E.w.dir/10)*10;$('ws').value=Math.round(E.w.spd)}
   $('wdV').textContent=compass(E.w.dir)+(E.w.manual?' (set)':'');$('wsV').textContent=Math.round(E.w.spd)+' mph';
   if($('sheet').classList.contains('min'))return;
-  const S=E.st,M=moonDay(E.p),SW=switchTimes(E.p);
-  const swTxt=SW.am?`AM ~${fmtT(SW.am)} · PM ~${fmtT(SW.pm)}`:'Weak all day (cloudy)';
+  renderScores();
+  const ST=E.st,M=moonDay(E.p),SW=switchTimes(E.p),LT=lightTimes(E.p,selDate),MV=moveScore();
   $('info').innerHTML=
     (st?cell('Land at stand',landText(st.lat,st.lng),true):'')+
-    cell('Sunrise',fmtT(S.sunrise))+cell('Sunset',fmtT(S.sunset))+
-    cell('Shooting light*',fmtT(S.dawn)+' – '+fmtT(S.dusk))+cell('Thermal switch (flat ground)',swTxt)+
+    cell('Movement conditions',MV?`${'★'.repeat(MV.sc)}${'☆'.repeat(5-MV.sc)} ${MV.why.join(', ')}`:'Available within the 16-day forecast',true)+
+    cell('Rut phase (rough)',rutPhase(selDate,E.p.lat),true)+
+    cell('Sunrise',fmtT(ST.sunrise))+cell('Sunset',fmtT(ST.sunset))+
+    cell('Shooting light*',fmtT(LT.start)+' – '+fmtT(LT.end))+cell('Thermal switch (flat)',SW.am?`AM ~${fmtT(SW.am)} · PM ~${fmtT(SW.pm)}`:'Weak all day (cloudy)')+
     cell('Moon',`${phaseName(M.il.phase)} ${Math.round(M.il.fraction*100)}%`)+cell('Moonrise / set',fmtT(M.rise)+' / '+fmtT(M.set))+
     cell('Major (overhead)',fmtT(add(M.over,-60))+' – '+fmtT(add(M.over,60)))+cell('Major (underfoot)',fmtT(add(M.under,-60))+' – '+fmtT(add(M.under,60)))+
     cell('Wind',E.w.none?'—':`${compass(E.w.dir)} ${Math.round(E.w.spd)} mph${E.w.gust!=null?' g'+Math.round(E.w.gust):''}`)+
     cell('Temp · clouds',E.w.temp!=null?`${Math.round(E.w.temp)}°F · ${Math.round(E.w.cloud)}%`:'—')+
     cell('Rain chance',E.w.rain!=null?Math.round(E.w.rain)+'%':'—')+cell('Stand elevation',ft)}
+let moonCache={k:'',v:null};
+function moonDay(p){const k=selDate.toDateString()+p.lat.toFixed(2)+p.lng.toFixed(2);if(moonCache.k===k)return moonCache.v;
+  let hi=-9,lo=9,th=null,tl=null;for(let m=0;m<1440;m+=10){const d=new Date(selDate.getTime()+m*6e4),a=SunCalc.getMoonPosition(d,p.lat,p.lng).altitude;if(a>hi){hi=a;th=d}if(a<lo){lo=a;tl=d}}
+  const mtm=SunCalc.getMoonTimes(selDate,p.lat,p.lng),il=SunCalc.getMoonIllumination(new Date(selDate.getTime()+12*36e5));
+  moonCache={k,v:{over:th,under:tl,rise:mtm.rise,set:mtm.set,il}};return moonCache.v}
+function phaseName(f){if(f<.03||f>.97)return'New';if(f<.22)return'Waxing crescent';if(f<.28)return'First quarter';if(f<.47)return'Waxing gibbous';if(f<.53)return'Full';if(f<.72)return'Waning gibbous';if(f<.78)return'Last quarter';return'Waning crescent'}
 
 let lastUI=0;
 function frame(now){if(playing){minutes=(minutes+1)%1440;dirty=true}
@@ -245,7 +453,7 @@ function frame(now){if(playing){minutes=(minutes+1)%1440;dirty=true}
     const st=activeStand();
     if(st){const sp=map.latLngToContainerPoint([st.lat,st.lng]);
       for(let k=0;k<3;k++)scent.push({x:sp.x+(Math.random()-.5)*6,y:sp.y+(Math.random()-.5)*6,vx:0,vy:0,life:300,max:300,s:0});
-      const tg=markers.filter(m=>m.type!=='stand').map(m=>({m,p:map.latLngToContainerPoint([m.lat,m.lng])})),r=hitR();
+      const tg=markers.filter(m=>m.type==='bed'||m.type==='food').map(m=>({m,p:map.latLngToContainerPoint([m.lat,m.lng])})),r=hitR();
       for(let i=scent.length-1;i>=0;i--){const p=scent[i];move(p,E);
         if(p.life<=0||p.x<-20||p.y<-20||p.x>W+20||p.y>H+20){scent.splice(i,1);continue}
         for(const t of tg)if(Math.hypot(p.x-t.p.x,p.y-t.p.y)<r)hits[t.m.id]=(hits[t.m.id]||0)+1;
@@ -253,29 +461,117 @@ function frame(now){if(playing){minutes=(minutes+1)%1440;dirty=true}
     if(dirty||now-lastUI>500){updateUI(E,hits);lastUI=now;dirty=false}}
   requestAnimationFrame(frame)}
 
-let mt;
-map.on('movestart',()=>{moving=true;scent=[]});
-map.on('moveend',()=>{moving=false;clearTimeout(mt);mt=setTimeout(()=>{buildElev();maybeWx();loadLand()},250)});
-window.addEventListener('resize',()=>{resizeFx();buildElev()});
-map.on('locationfound',e=>{if(me)me.remove();me=L.circleMarker(e.latlng,{radius:7,color:'#fff',weight:2,fillColor:'#2f80ed',fillOpacity:1}).addTo(map)});
-map.on('locationerror',()=>{$('alert').textContent='Location unavailable. Pan to your property instead.'});
+let actx=null,fired={};
+document.addEventListener('click',()=>{if(!actx)try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}},{once:true});
+function buzz(msg){try{navigator.vibrate&&navigator.vibrate([400,200,400])}catch(e){}
+  try{if(actx){actx.resume();const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=880;g.gain.value=.15;o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+.5)}}catch(e){}
+  const a=$('alert');a.textContent=msg;a.className='bad'}
+function tick(){const now=new Date(),lt=lightTimes(refPt(),now);
+  $('lightP').textContent=lt.start&&now<lt.start?'Legal light in '+hm(lt.start-now):lt.end&&now<lt.end?'Light ends in '+hm(lt.end-now):'Shooting light over';
+  if(S.alerts&&lt.start&&lt.end){const dk=now.toDateString(),chk=(key,t,msg)=>{const id=dk+key;if(t&&!fired[id]&&now>=t&&now-t<120000){fired[id]=1;buzz(msg)}};
+    chk('s',lt.start,'Legal shooting light is here');chk('w',add(lt.end,-15),'15 minutes of shooting light left');chk('e',lt.end,'Shooting light is over')}
+  if(S.backBy&&!S.checkedIn&&now>new Date(S.backBy)){$('checkBanner').classList.remove('hide');if(!fired['ci'+S.backBy]){fired['ci'+S.backBy]=1;buzz('Check-in time has passed')}}}
+setInterval(tick,1000);
 
+let watchId=null,crumb=null,navLine=null;
+function setMe(ll){if(me)me.setLatLng(ll);else me=L.circleMarker(ll,{radius:7,color:'#fff',weight:2,fillColor:'#2f80ed',fillOpacity:1,interactive:false}).addTo(map)}
+function bearing(a,b){const r=Math.PI/180,y=Math.sin((b.lng-a.lng)*r)*Math.cos(b.lat*r),x=Math.cos(a.lat*r)*Math.sin(b.lat*r)-Math.sin(a.lat*r)*Math.cos(b.lat*r)*Math.cos((b.lng-a.lng)*r);return(Math.atan2(y,x)/r+360)%360}
+function onPos(pos){meLL={lat:pos.coords.latitude,lng:pos.coords.longitude};const ll=[meLL.lat,meLL.lng];setMe(ll);
+  if(S.crumbs){if(!crumb)crumb=L.polyline([],{color:'#2f80ed',weight:3,dashArray:'2 6',interactive:false}).addTo(map);crumb.addLatLng(ll)}
+  const st=activeStand();if(!st)return;if(!navLine)navLine=L.polyline([],{color:'#ffd54a',weight:2,dashArray:'8 8',interactive:false}).addTo(map);
+  navLine.setLatLngs([ll,[st.lat,st.lng]]);const dm=map.distance(ll,[st.lat,st.lng]),brg=bearing(meLL,st);
+  $('navP').textContent=`${mName(st)}: ${Math.round(dm*1.0936)} yd · ${compass(brg)} ${Math.round(brg)}°`;$('navP').classList.remove('hide')}
+$('navBtn').onclick=()=>{if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;$('navBtn').textContent='Navigate to stand';$('navP').classList.add('hide');if(navLine){navLine.remove();navLine=null}return}
+  if(!activeStand()){alert('Drop or pick a stand first.');return}
+  watchId=navigator.geolocation.watchPosition(onPos,()=>alert('Location unavailable.'),{enableHighAccuracy:true,maximumAge:5000});$('navBtn').textContent='Stop navigation'};
+
+const gmaps=(lat,lng)=>`https://maps.google.com/?q=${(+lat).toFixed(5)},${(+lng).toFixed(5)}`;
+function sms(body){if(!S.phone){alert('Add a contact number under Walk-in and safety first.');return}location.href=`sms:${S.phone.replace(/[^\d+]/g,'')}?body=${encodeURIComponent(body)}`}
+$('txtPlan').onclick=()=>{const st=activeStand();if(!st){alert('Drop a stand first.');return}
+  sms(`${S.name?S.name+' is':'I am'} hunting at ${mName(st)}: ${gmaps(st.lat,st.lng)}${S.backBy&&!S.checkedIn?' Back by '+fmtT(new Date(S.backBy))+'.':''}`)};
+$('ciStart').onclick=()=>{const v=$('backBy').value;if(!v){alert('Pick a time first.');return}const[h,m]=v.split(':').map(Number),d=new Date();d.setHours(h,m,0,0);if(d<new Date())d.setDate(d.getDate()+1);
+  S.backBy=d.toISOString();S.checkedIn=false;saveS();alert('Check-in set for '+fmtT(d)+'. Keep the app open, and text your plan too.')};
+$('ciOk').onclick=()=>{S.checkedIn=true;S.backBy=null;saveS();$('checkBanner').classList.add('hide')};
+$('ciHelp').onclick=()=>{const p=meLL||activeStand();sms(`Please check on me, I'm past my check-in time. ${p?'Last known location: '+gmaps(p.lat,p.lng):''}`)};
+
+const b64e=s=>btoa(unescape(encodeURIComponent(s))),b64d=s=>decodeURIComponent(escape(atob(s)));
+$('share').onclick=async()=>{const st=markers.filter(m=>m.type==='stand');if(!st.length){alert('Drop a stand first.');return}
+  const data={n:S.name||'Hunter',s:st.map(m=>[mName(m),+m.lat.toFixed(5),+m.lng.toFixed(5)])};
+  const url=location.origin+location.pathname+'#plan='+encodeURIComponent(b64e(JSON.stringify(data)));
+  if(navigator.share){try{await navigator.share({title:'Hunting plan',text:`${data.n}'s stands`,url})}catch(e){}return}
+  try{await navigator.clipboard.writeText(url);alert('Link copied. Send it to your hunting party.')}catch(e){prompt('Copy this link:',url)}};
+function importPlan(){const m=location.hash.match(/plan=([^&]+)/);if(!m)return;
+  try{const d=JSON.parse(b64d(decodeURIComponent(m[1])));if(confirm(`Add ${d.n}'s ${d.s.length} stand(s) to your map?`)){
+    d.s.forEach(s=>markers.push({id:Math.random().toString(36).slice(2),type:'party',name:`${d.n}: ${s[0]}`,lat:s[1],lng:s[2],date:new Date().toISOString()}));saveM()}}
+  catch(e){alert('That shared plan link is broken.')}
+  history.replaceState(null,'',location.pathname)}
+
+$('lgSave').onclick=()=>{const st=activeStand();if(!st){alert('Pick a stand first.');return}
+  const E=env(curTime(),st),sp=map.latLngToContainerPoint([st.lat,st.lng]),f=flow(sp.x,sp.y,E),M=SunCalc.getMoonIllumination(E.d);
+  log.push({id:Date.now().toString(36),sn:mName(st),t:E.d.toISOString(),deer:+$('lgDeer').value||0,bucks:+$('lgBucks').value||0,note:$('lgNote').value.trim(),
+    wd:Math.round(E.w.dir),ws:Math.round(E.w.spd),temp:E.w.temp!=null?Math.round(E.w.temp):null,th:f.s>.2?'rising':f.s<-.2?'falling':'switching',moon:Math.round(M.fraction*100)});
+  if(SV('ts_log',log)){$('lgDeer').value=0;$('lgBucks').value=0;$('lgNote').value='';renderLog();alert('Sit logged.')}};
+function renderLog(){const box=$('lgSum');if(!log.length){box.innerHTML='<p class="fine">No sits logged yet.</p>';return}
+  const by={};log.forEach(l=>{(by[l.sn]=by[l.sn]||[]).push(l)});let h='';
+  for(const[sn,arr]of Object.entries(by)){const tot=arr.reduce((s,l)=>s+l.deer,0),bk=arr.reduce((s,l)=>s+l.bucks,0);
+    const g=fn=>{const o={};arr.forEach(l=>{const k=fn(l);(o[k]=o[k]||[]).push(l.deer)});let best=null;for(const[k,v]of Object.entries(o)){const a=v.reduce((x,y)=>x+y,0)/v.length;if(!best||a>best.a)best={k,a}}return best};
+    const bw=g(l=>c8(l.wd)),bt=g(l=>l.th);
+    h+=`<div class="cell" style="margin:6px 0"><b>${esc(sn)}</b><small>${arr.length} sits · ${(tot/arr.length).toFixed(1)} deer/sit · ${bk} bucks${arr.length>=3?` · best wind ${bw.k} (${bw.a.toFixed(1)}/sit) · best when thermals ${bt.k}`:' · log 3+ sits to see patterns'}</small></div>`}
+  h+=log.slice(-8).reverse().map(l=>{const d=new Date(l.t);return`<div class="lg"><span>${d.toLocaleDateString([],{month:'short',day:'numeric'})} ${fmtT(d)} · ${esc(l.sn)} · ${l.deer} deer${l.bucks?' ('+l.bucks+' bucks)':''} · ${c8(l.wd)} ${l.ws} mph · ${l.th}${l.note?' · '+esc(l.note):''}</span><button data-act="lgdel" data-id="${l.id}" style="padding:2px 8px">✕</button></div>`}).join('');
+  box.innerHTML=h}
+$('lgExport').onclick=()=>{if(!log.length){alert('No sits logged yet.');return}
+  const rows=[['date','time','stand','deer','bucks','wind_dir','wind_mph','temp_f','thermals','moon_pct','notes']].concat(log.map(l=>{const d=new Date(l.t);return[d.toLocaleDateString(),fmtT(d),l.sn,l.deer,l.bucks,c8(l.wd),l.ws,l.temp??'',l.th,l.moon,l.note]}));
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'),a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='hunt-log.csv';a.click()};
+
+function tileRange(b,z){const n=2**z,lx=l=>Math.floor((l+180)/360*n),ly=l=>{const r=l*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n)};
+  return{x0:lx(b.getWest()),x1:lx(b.getEast()),y0:ly(b.getNorth()),y1:ly(b.getSouth())}}
+$('offSave').onclick=async()=>{const msg=$('offMsg');if(!('caches' in window)){msg.textContent='This browser does not support offline saving.';return}
+  const z0=map.getZoom();if(z0<12){alert('Zoom in to your property first.');return}
+  const b=map.getBounds(),jobs=[],maxN=Math.min(base.options.maxNativeZoom||18,18);
+  for(let z=z0;z<=Math.min(z0+2,maxN);z++){const t=tileRange(b,z);for(let x=t.x0;x<=t.x1;x++)for(let y=t.y0;y<=t.y1;y++)jobs.push({u:L.Util.template(base._url,{z,x,y}),c:false})}
+  for(let ez=clamp(Math.round(z0),5,15);ez<=Math.min(Math.round(z0)+2,15);ez++){const t=tileRange(b,ez);for(let x=t.x0;x<=t.x1;x++)for(let y=t.y0;y<=t.y1;y++)jobs.push({u:`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${ez}/${x}/${y}.png`,c:true})}
+  if(jobs.length>900){alert(`That's ${jobs.length} tiles. Zoom in closer and save in pieces.`);return}
+  const total=jobs.length,cache=await caches.open('ts-tiles');let done=0,fail=0;
+  const worker=async()=>{while(jobs.length){const j=jobs.pop();try{const r=await fetch(j.u,{mode:j.c?'cors':'no-cors'});await cache.put(j.u,r)}catch(e){fail++}done++;msg.textContent=`Saving… ${done} of ${total}`}};
+  await Promise.all([1,2,3,4,5,6].map(worker));
+  try{const r=await fetch(landURL(b.pad(0.2),z0)),j=await r.json();if(j.features)SV('ts_land_off',j)}catch(e){}
+  msg.textContent=`Saved ${total-fail} of ${total} tiles for this area, plus public land and the latest forecast. Open the app here with no signal and it will use them.`};
+$('offClear').onclick=async()=>{if(!confirm('Delete all saved offline maps?'))return;try{await caches.delete('ts-tiles')}catch(e){}localStorage.removeItem('ts_land_off');$('offMsg').textContent='Offline data cleared.'};
+
+function applyNight(){document.body.classList.toggle('night',!!S.night)}
+function bindTog(id,key,fn){const el=$(id);el.checked=!!S[key];el.onchange=()=>{S[key]=el.checked;saveS();fn&&fn();dirty=true}}
+bindTog('tFeat','feat',buildFeatures);bindTog('tDrain','drain',buildFeatures);bindTog('tBed','bed',buildFeatures);
+bindTog('tCrumb','crumbs');bindTog('tAlerts','alerts');bindTog('tNight','night',applyNight);
+$('lightRule').value=S.lightRule;$('lightRule').onchange=e=>{S.lightRule=e.target.value;saveS();dirty=true};
+$('uname').value=S.name;$('uname').onchange=e=>{S.name=e.target.value.trim();saveS()};
+$('phone').value=S.phone;$('phone').onchange=e=>{S.phone=e.target.value.trim();saveS()};
+
+let mvT;
+map.on('movestart',()=>{moving=true;scent=[];tctx.clearRect(0,0,W,H)});
+map.on('moveend',()=>{moving=false;clearTimeout(mvT);mvT=setTimeout(()=>{buildElev();maybeWx();loadLand()},250);routeKey=''});
+window.addEventListener('resize',()=>{resizeFx();buildElev()});
+map.on('locationfound',e=>{meLL={lat:e.latlng.lat,lng:e.latlng.lng};setMe(e.latlng)});
+map.on('locationerror',()=>{$('alert').textContent='Location unavailable. Pan to your property instead.'});
 $('time').oninput=e=>{minutes=+e.target.value;dirty=true;scent=[]};
 const dIn=$('date');dIn.value=`${selDate.getFullYear()}-${pad(selDate.getMonth()+1)}-${pad(selDate.getDate())}`;
 dIn.onchange=()=>{const[y,m,d]=dIn.value.split('-').map(Number);if(y){selDate=new Date(y,m-1,d);dirty=true;scent=[]}};
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'❚❚ Pause':'▶ Play'};
 $('now').onclick=()=>{const n=new Date();selDate=new Date(n);selDate.setHours(0,0,0,0);dIn.value=`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`;minutes=n.getHours()*60+n.getMinutes();dirty=true;scent=[]};
 $('loc').onclick=()=>map.locate({setView:true,maxZoom:16});
-document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b))});
+document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
 const setManual=()=>{manual={dir:+$('wd').value,spd:+$('ws').value};dirty=true};
 $('wd').oninput=setManual;$('ws').oninput=setManual;
 $('live').onclick=()=>{manual=null;dirty=true};
 $('grab').onclick=()=>{const s=$('sheet');s.classList.toggle('min');$('grab').textContent=s.classList.contains('min')?'More ▴':'Less ▾';dirty=true};
+$('scoreBox').addEventListener('toggle',()=>{dirty=true});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
-resizeFx();drawMarkers();
+resizeFx();applyNight();importPlan();drawMarkers();renderLog();
+if(S.backBy&&!S.checkedIn)$('backBy').value=`${pad(new Date(S.backBy).getHours())}:${pad(new Date(S.backBy).getMinutes())}`;
 if(markers.length)map.fitBounds(L.latLngBounds(markers.map(m=>[m.lat,m.lng])).pad(0.6),{maxZoom:16});
 else map.locate({setView:true,maxZoom:15});
-buildElev();maybeWx();loadLand();requestAnimationFrame(frame);
+buildElev();maybeWx();loadLand();tick();requestAnimationFrame(frame);
 </script>
 </body>
 </html>
